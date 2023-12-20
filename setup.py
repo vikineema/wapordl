@@ -8,8 +8,8 @@ setup(
     python_requires='>=3.7',
     install_requires = [
         "requests",
-        "pandas",
+        "pandas>=2.1.0",
         "numpy",
-        "gdal"
+        "gdal>=3.4.0"
     ],
 )
