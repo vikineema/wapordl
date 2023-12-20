@@ -155,10 +155,8 @@ def wapor_map(region, variable, folder, period, overview = "NONE"):
                   )
     return fp
 
-def wapor_ts(region, variable, period, 
-             overview = 1, 
-             req_stats = ["minimum", "maximum", "mean", "stddev"],
-             folder = None):
+def wapor_ts(region, variable, period, overview, 
+             req_stats = ["minimum", "maximum", "mean", "stddev"]):
     
     ## Check if valid statistics have been selected.
     if isinstance(req_stats, type(None)):
@@ -176,7 +174,7 @@ def wapor_ts(region, variable, period,
             period = period, 
             overview = overview, 
             req_stats = req_stats,
-            folder = folder,
+            folder = None,
              )
     
     return df
