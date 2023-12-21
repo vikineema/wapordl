@@ -1,5 +1,6 @@
 import os
 import requests
+import logging
 import numpy as np
 import pandas as pd
 from osgeo import gdal
@@ -34,29 +35,71 @@ def generate_urls_v3(variable):
     urls = [x[0] for x in collect_responses(mapset_url, info = ["downloadUrl"])]
     return tuple(sorted(urls))
 
-def wapor_dl(region, variable, 
+def wapor_dl(region, variable,
+             l3_region = None,
              period = ["2021-01-01", "2022-01-01"], 
-             overview = "auto", 
+             overview = "NONE", 
              req_stats = ["minimum", "maximum", "mean"],
              folder = None):
+    """_summary_
 
+    Parameters
+    ----------
+    region : str, list
+        Path to a geojson file, or a list of floats specifying a bounding-box [<xmin> <ymin> <xmax> <ymax>].
+    variable : str
+        Name of the variable to download.
+    period : list, optional
+        List of a start and end date, by default ["2021-01-01", "2022-01-01"]
+    overview : str, int, optional
+        Which overview to use, specify "NONE" to not use an overview, 0 uses the first overview, etc., by default "NONE"
+    req_stats : list, optional
+        Specify which statistics to export, by default ["minimum", "maximum", "mean"]
+    folder : str, optional
+        Folder to store output files, by default None
+
+    Returns
+    -------
+    str, pd.Dataframe
+        If `req_stats` is not None, returns a pd.Dataframe. Otherwise a path to file is returned.
+    """
+    ## Retrieve info from variable name.
+    level, var_code, tres = variable.split("-")
+
+    if level == "L3":
+        raise ValueError("Level-3 data will be available soon.")
+
+    ## Check l3_region code.
+    if level == "L3" and isinstance(l3_region, type(None)):
+        raise ValueError(f"Please specify a `l3_region` for a {level} variable ({variable})")
+    if not isinstance(l3_region, type(None)):
+        valid_l3_regions = ["AWA"]
+        if not bool(np.isin(l3_region, valid_l3_regions)):
+            raise ValueError(f"Invalid `l3_region`, please specify one of {valid_l3_regions}.")
+        if level != "L3":
+            logging.warning("l3_region will be ignored (no l3 variable selected).")
+    
     ## Check if region is valid.
-    if not os.path.isfile(region) or os.path.splitext(region)[-1] != ".geojson":
-        raise ValueError
-    else:
-        region_code = os.path.split(region)[-1].replace(".geojson", "")
-
-    ## Collect urls for requested variable.
-    public_urls = generate_urls_v3(variable)
+    if isinstance(region, str):
+        if not os.path.isfile(region) or os.path.splitext(region)[-1] != ".geojson":
+            raise ValueError(f"Geojson file not found.")
+        else:
+            region_code = os.path.split(region)[-1].replace(".geojson", "")
+    elif isinstance(region, list):
+        if not all([region[2] > region[0], region[3] > region[1]]):
+            raise ValueError(f"Invalid bounding box.")
+        else:
+            region_code = "bb"
+    elif isinstance(region, type(None)):
+        region_code = l3_region
+        if level != "L3":
+            raise ValueError("Only level-3 variables can be processed without specifying a region.")
 
     ## Parse the dates in period.
     if not isinstance(period, type(None)):
         period = [pd.Timestamp(x) for x in period]
         if period[0] > period[1]:
-            raise ValueError
-
-    ## Retrieve info from variable name.
-    level, var_code, tres = variable.split("-")
+            raise ValueError(f"Invalid period.")
 
     ## Define function to get pd.Timestamp from urls.
     if tres == "D":
@@ -73,7 +116,10 @@ def wapor_dl(region, variable,
             year = os.path.split(url)[-1].split(".")[-2]
             return pd.Timestamp(f"{year}-01-01")
     else:
-        raise ValueError
+        raise ValueError("Invalid temporal resolution.")
+
+    ## Collect urls for requested variable.
+    public_urls = generate_urls_v3(variable)
 
     ## Determine date for each url and filter on requested period.
     date_urls = [(date_func(url), url) for url in public_urls]
@@ -95,7 +141,7 @@ def wapor_dl(region, variable,
 
     ## Check offset factor.
     if offset != 0:
-        print("WARNING: offset factor is not zero, statistics might be wrong.")
+        logging.warning("Offset factor is not zero, statistics might be wrong.")
 
     if folder:
         if not os.path.isdir(folder):
@@ -113,9 +159,15 @@ def wapor_dl(region, variable,
     vrt = gdal.BuildVRT(vrt_fn, ["/vsicurl/" + x[1] for x in date_urls], options = vrt_options)
     vrt.FlushCache()
 
+    if isinstance(region, list):
+        region_option = {"outputBounds": region}
+    elif isinstance(region, str):
+        region_option = {"cutlineDSName": region}
+    else:
+        region_option = {}
+
     ## Download the data.
     warp_options = gdal.WarpOptions(
-        cutlineDSName = region,
         cropToCutline = True,
         overviewLevel = overview,
         multithread = True,
@@ -123,6 +175,7 @@ def wapor_dl(region, variable,
         xRes = abs(xres) * 2**(overview_ + 1),
         yRes = abs(yres) * 2**(overview_ + 1),
         creationOptions = ["COMPRESS=LZW"],
+        **region_option
     )
     warp = gdal.Warp(warp_fn, vrt_fn, options = warp_options)
     warp.FlushCache()
@@ -144,11 +197,11 @@ def wapor_dl(region, variable,
 
     return data
 
-def wapor_map(region, variable, folder, period, overview = "NONE"):
+def wapor_map(region, variable, period, folder, overview = "NONE"):
 
     ## Check if raw-data will be downloaded.
     if overview != "NONE":
-        print("Downloading an overview instead of original data.")
+        logging.warning("Downloading an overview instead of original data.")
 
     ## Check if a valid path to download into has been defined.
     if not os.path.isdir(folder):
@@ -168,11 +221,11 @@ def wapor_ts(region, variable, period, overview,
     
     ## Check if valid statistics have been selected.
     if isinstance(req_stats, type(None)):
-        raise ValueError
+        raise ValueError("Please specify a list of required statistics.")
     valid_stats = np.isin(req_stats, ["minimum", "maximum", "mean"])
     req_stats = np.array(req_stats)[valid_stats].tolist()
     if len(req_stats) == 0:
-        raise ValueError
+        raise ValueError(f"Please select at least one valid statistic from {valid_stats}.")
     if False in valid_stats:
         print(f"Invalid statistics detected, continuing with `{', '.join(req_stats)}`.")
 
@@ -194,13 +247,15 @@ if __name__ == "__main__":
     regions = glob.glob(r"/Users/hmcoerver/Local/wapor_validation/SHAPES/BASINS/*.geojson")
     region = regions[0]
 
-    period1 = ["2021-01-01", "2021-07-01"]
-    period2 = ["2021-01-01", "2022-02-01"]
+    bb = [25, -17, 26, -16]
+
+    overview = 3
+
+    period = ["2021-01-01", "2021-03-01"]
     req_stats = ["minimum", "maximum", "mean"]
     variable = "L2-AETI-D"
 
-    df1 = wapor_ts(region, "L2-AETI-D", period = period1, overview = 6)
-    df2 = wapor_ts(region, "L2-AETI-M", period = period2, overview = 5)
-    df3 = wapor_ts(region, "L2-AETI-A", period = period2, overview = 5)
+    folder = r"/Users/hmcoerver/Local/test"
 
-    fp = wapor_map(region, "L2-AETI-D", period = period1, folder = r"/Users/hmcoerver/Local/test")
+    df1 = wapor_ts(region, "L2-AETI-D", period, overview)
+
