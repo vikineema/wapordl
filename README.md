@@ -1,12 +1,16 @@
-## WaPORDL
+# WaPORDL
 
 This package allows users to download data from the WaPOR3 dataset as spatially aggregated timeseries or as spatial data clipped to a bounding-box or shapefile.
 
-### Installation
+## Installation
 
+### Conda (recommended)
+`conda install -c conda-forge wapordl`
+
+### Pip (make sure GDAL is already installed)
 `pip install wapordl`
 
-### Usage
+## Usage
 
 To download a timeseries for a certain region:
 
@@ -42,7 +46,7 @@ To download a geotiff for a certain region and period of time:
 
     >>> 'path/to/some/output/folder/my_region_L2-AETI-D_NONE.tif'
 
-### Upcoming
+## Upcoming
 
 - Download a region from a bounding-box (i.e. without a shape).
 - A progress bar.
@@ -50,7 +54,7 @@ To download a geotiff for a certain region and period of time:
 - Automatic overview selection based on the size of the shape.
 - Support for other input formats besides geojson (e.g. shapefiles, geopackages etc.)
 - Support for other output formats besides geotiff (e.g. netcdf).
-- Installation with conda.
+- ~~Installation with conda.~~ ✅
 - More metadata in the output files.
 - More log information.
 - Option to select region for Level-3 data.
