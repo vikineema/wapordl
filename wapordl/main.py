@@ -37,7 +37,7 @@ def generate_urls_v3(variable):
 def wapor_dl(region, variable, 
              period = ["2021-01-01", "2022-01-01"], 
              overview = "auto", 
-             req_stats = ["minimum", "maximum", "mean", "stddev"],
+             req_stats = ["minimum", "maximum", "mean"],
              folder = None):
 
     ## Check if region is valid.
@@ -89,6 +89,14 @@ def wapor_dl(region, variable,
     overview_ = -1 if overview == "NONE" else overview
     xres, yres = info["geoTransform"][1::4]
 
+    ## Get scale and offset factor.
+    scale = info["bands"][0]["scale"]
+    offset = info["bands"][0]["offset"]
+
+    ## Check offset factor.
+    if offset != 0:
+        print("WARNING: offset factor is not zero, statistics might be wrong.")
+
     if folder:
         if not os.path.isdir(folder):
             os.makedirs(folder)
@@ -123,8 +131,8 @@ def wapor_dl(region, variable,
     if not isinstance(req_stats, type(None)):
         stats = gdal.Info(warp_fn, format = "json", stats = True)
         data = {statistic: [x["stats"][statistic] for x in stats["stac"]["raster:bands"]] for statistic in req_stats}
+        data = pd.DataFrame(data) * scale
         data["date"] = [x[0] for x in date_urls]
-        data = pd.DataFrame(data)
     else:
         data = warp_fn
 
@@ -156,12 +164,12 @@ def wapor_map(region, variable, folder, period, overview = "NONE"):
     return fp
 
 def wapor_ts(region, variable, period, overview, 
-             req_stats = ["minimum", "maximum", "mean", "stddev"]):
+             req_stats = ["minimum", "maximum", "mean"]):
     
     ## Check if valid statistics have been selected.
     if isinstance(req_stats, type(None)):
         raise ValueError
-    valid_stats = np.isin(req_stats, ["minimum", "maximum", "mean", "stddev"])
+    valid_stats = np.isin(req_stats, ["minimum", "maximum", "mean"])
     req_stats = np.array(req_stats)[valid_stats].tolist()
     if len(req_stats) == 0:
         raise ValueError
@@ -188,7 +196,8 @@ if __name__ == "__main__":
 
     period1 = ["2021-01-01", "2021-07-01"]
     period2 = ["2021-01-01", "2022-02-01"]
-    req_stats = ["minimum", "maximum", "mean", "stddev"]
+    req_stats = ["minimum", "maximum", "mean"]
+    variable = "L2-AETI-D"
 
     df1 = wapor_ts(region, "L2-AETI-D", period = period1, overview = 6)
     df2 = wapor_ts(region, "L2-AETI-M", period = period2, overview = 5)
