@@ -125,9 +125,10 @@ def wapor_dl(region, variable,
     date_urls = [(date_func(url), url) for url in public_urls]
     if not isinstance(period, type(None)):
         date_urls = [x for x in date_urls if (x[0] >= period[0]) & (x[0] <= period[1])]
-
-    ## Print overview statement.
-    print(f"Found {len(date_urls)} files for {variable} between {period[0]} and {period[1]}.")
+        ## Print overview statement.
+        print(f"Found {len(date_urls)} files for {variable} between {period[0]} and {period[1]}.")
+    else:
+        print(f"Found {len(date_urls)} files for {variable}.")
 
     ## Determine required output resolution.
     # NOTE maybe move this to external function (assumes info the same for all urls)
