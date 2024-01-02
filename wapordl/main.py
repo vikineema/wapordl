@@ -36,6 +36,41 @@ def generate_urls_v3(variable):
     urls = [x[0] for x in collect_responses(mapset_url, info = ["downloadUrl"])]
     return tuple(sorted(urls))
 
+def cog_dl(urls: list, region: str, out_fn: str, overview = "NONE", warp_kwargs = {}):
+
+    vrt_fn = out_fn.replace(".tif", ".vrt")
+
+    ## Build VRT with all the required data.
+    vrt_options = gdal.BuildVRTOptions(
+        separate=True,
+    )
+    vrt = gdal.BuildVRT(vrt_fn, ["/vsicurl/" + x[1] for x in urls], options = vrt_options)
+    vrt.FlushCache()
+
+    if isinstance(region, list):
+        region_option = {"outputBounds": region,
+                         "outputBoundsSRS": "epsg:4326",
+                         }
+    elif isinstance(region, str):
+        region_option = {"cutlineDSName": region}
+    else:
+        region_option = {}
+
+    ## Download the data.
+    warp_options = gdal.WarpOptions(
+        cropToCutline = True,
+        overviewLevel = overview,
+        multithread = True,
+        targetAlignedPixels = True,
+        creationOptions = ["COMPRESS=LZW"],
+        **warp_kwargs,
+        **region_option,
+    )
+    warp = gdal.Warp(out_fn, vrt_fn, options = warp_options)
+    warp.FlushCache()
+
+    return out_fn
+
 def wapor_dl(region, variable,
              l3_region = None,
              period = ["2021-01-01", "2022-01-01"], 
@@ -46,7 +81,7 @@ def wapor_dl(region, variable,
 
     Parameters
     ----------
-    region : str, list
+    region : str, list, None
         Path to a geojson file, or a list of floats specifying a bounding-box [<xmin> <ymin> <xmax> <ymax>].
     variable : str
         Name of the variable to download.
@@ -148,6 +183,10 @@ def wapor_dl(region, variable,
     info = gdal.Info("/vsicurl/" + date_urls[0][1], format = "json")
     overview_ = -1 if overview == "NONE" else overview
     xres, yres = info["geoTransform"][1::4]
+    warp_kwargs = {
+        "xRes": abs(xres) * 2**(overview_ + 1),
+        "yRes": abs(yres) * 2**(overview_ + 1),
+    }
 
     ## Check if region overlaps with datasets bounding-box.
     if not isinstance(region_shape, type(None)):
@@ -168,41 +207,11 @@ def wapor_dl(region, variable,
     if folder:
         if not os.path.isdir(folder):
             os.makedirs(folder)
-        vrt_fn = os.path.join(folder, f"{region_code}_{variable}_{overview}.vrt")
         warp_fn = os.path.join(folder, f"{region_code}_{variable}_{overview}.tif")
     else:
-        vrt_fn = f"/vsimem/{region_code}_{variable}_{overview}.vrt"
         warp_fn = f"/vsimem/{region_code}_{variable}_{overview}.tif"
 
-    ## Build VRT with all the required data.
-    vrt_options = gdal.BuildVRTOptions(
-        separate=True,
-    )
-    vrt = gdal.BuildVRT(vrt_fn, ["/vsicurl/" + x[1] for x in date_urls], options = vrt_options)
-    vrt.FlushCache()
-
-    if isinstance(region, list):
-        region_option = {"outputBounds": region,
-                         "outputBoundsSRS": "epsg:4326",
-                         }
-    elif isinstance(region, str):
-        region_option = {"cutlineDSName": region}
-    else:
-        region_option = {}
-
-    ## Download the data.
-    warp_options = gdal.WarpOptions(
-        cropToCutline = True,
-        overviewLevel = overview,
-        multithread = True,
-        targetAlignedPixels = True,
-        xRes = abs(xres) * 2**(overview_ + 1),
-        yRes = abs(yres) * 2**(overview_ + 1),
-        creationOptions = ["COMPRESS=LZW"],
-        **region_option
-    )
-    warp = gdal.Warp(warp_fn, vrt_fn, options = warp_options)
-    warp.FlushCache()
+    warp_fn = cog_dl(date_urls, region, warp_fn, overview = overview_, warp_kwargs = warp_kwargs)
 
     ## Collect the stats into a pd.Dataframe if necessary.
     if not isinstance(req_stats, type(None)):
@@ -214,8 +223,8 @@ def wapor_dl(region, variable,
         data = warp_fn
 
     ## Unlink memory files.
-    if "/vsimem/" in vrt_fn:
-        _ = gdal.Unlink(vrt_fn)
+    if "/vsimem/" in warp_fn.replace(".tif", ".vrt"):
+        _ = gdal.Unlink(warp_fn.replace(".tif", ".vrt"))
     if "/vsimem/" in warp_fn:
         _ = gdal.Unlink(warp_fn)
 
