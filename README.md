@@ -56,16 +56,16 @@ To download a timeseries and a geotiff for a bounding-box:
     df = wapor_ts(bb, variable, period, overview)
     fp = wapor_map(bb, variable, period, folder)
 
-To work with level-3 data a region-code needs to be specified and the region/bb argument is optional:
+When working with level-3 data, a region-code needs to be specified and the region argument can be set to `None`:
     
-    bb = [35.75, 33.70, 35.82, 33.75]
+    region = "path/to/some/my_region.geojson"
     folder = "path/to/some/output/folder"
     variable = "L3-T-D"
     period = ["2021-01-01", "2021-07-01"]
     overview = 3
     l3_region = "BKA"
 
-    df = wapor_ts(bb, variable, period, overview, l3_region = l3_region)
+    df = wapor_ts(region, variable, period, overview, l3_region = l3_region)
     fp = wapor_map(None, variable, period, folder, l3_region = l3_region)
 
 ## Upcoming
