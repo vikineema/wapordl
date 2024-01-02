@@ -1,6 +1,7 @@
 import os
 import requests
 import logging
+import shapely
 import numpy as np
 import pandas as pd
 from osgeo import gdal
@@ -66,14 +67,12 @@ def wapor_dl(region, variable,
     ## Retrieve info from variable name.
     level, var_code, tres = variable.split("-")
 
-    if level == "L3":
-        raise ValueError("Level-3 data will be available soon.")
-
     ## Check l3_region code.
     if level == "L3" and isinstance(l3_region, type(None)):
         raise ValueError(f"Please specify a `l3_region` for a {level} variable ({variable})")
     if not isinstance(l3_region, type(None)):
-        valid_l3_regions = ["AWA"]
+        valid_l3_regions = ['BKA', 'ERB', 'GAR', 'GEZ', 'JAF', 'JEN', 'JVA', 'KAI', 'ODN',
+                                'PAL', 'SED']
         if not bool(np.isin(l3_region, valid_l3_regions)):
             raise ValueError(f"Invalid `l3_region`, please specify one of {valid_l3_regions}.")
         if level != "L3":
@@ -85,13 +84,20 @@ def wapor_dl(region, variable,
             raise ValueError(f"Geojson file not found.")
         else:
             region_code = os.path.split(region)[-1].replace(".geojson", "")
+            region_shape = shapely.from_geojson(open(region,'r').read())
     elif isinstance(region, list):
         if not all([region[2] > region[0], region[3] > region[1]]):
             raise ValueError(f"Invalid bounding box.")
         else:
             region_code = "bb"
+            region_shape = shapely.Polygon([(region[0], region[1]), 
+                                            (region[2], region[1]), 
+                                            (region[2], region[3]), 
+                                            (region[0], region[3]), 
+                                            (region[0], region[1])])
     elif isinstance(region, type(None)):
         region_code = l3_region
+        region_shape = None
         if level != "L3":
             raise ValueError("Only level-3 variables can be processed without specifying a region.")
 
@@ -121,8 +127,15 @@ def wapor_dl(region, variable,
     ## Collect urls for requested variable.
     public_urls = generate_urls_v3(variable)
 
+    ## TODO: Check if these filters can be applied directly in the API Query.
+    ## Filter L3 region.
+    if level == "L3" and not isinstance(l3_region, type(None)):
+        region_urls = [url for url in public_urls if l3_region in url]
+    else:
+        region_urls = public_urls
+
     ## Determine date for each url and filter on requested period.
-    date_urls = [(date_func(url), url) for url in public_urls]
+    date_urls = [(date_func(url), url) for url in region_urls]
     if not isinstance(period, type(None)):
         date_urls = [x for x in date_urls if (x[0] >= period[0]) & (x[0] <= period[1])]
         ## Print overview statement.
@@ -135,6 +148,14 @@ def wapor_dl(region, variable,
     info = gdal.Info("/vsicurl/" + date_urls[0][1], format = "json")
     overview_ = -1 if overview == "NONE" else overview
     xres, yres = info["geoTransform"][1::4]
+
+    ## Check if region overlaps with datasets bounding-box.
+    if not isinstance(region_shape, type(None)):
+        data_bb = shapely.Polygon(np.array(info["wgs84Extent"]["coordinates"])[0])
+        if not data_bb.intersects(region_shape):
+            info_lbl1 = region_code if region_code != "bb" else str(region)
+            info_lbl2 = variable if isinstance(l3_region, type(None)) else f"{variable}.{l3_region}"
+            raise ValueError(f"Selected region ({info_lbl1}) has no overlap with the datasets ({info_lbl2}) bounding-box.")
 
     ## Get scale and offset factor.
     scale = info["bands"][0]["scale"]
@@ -161,7 +182,9 @@ def wapor_dl(region, variable,
     vrt.FlushCache()
 
     if isinstance(region, list):
-        region_option = {"outputBounds": region}
+        region_option = {"outputBounds": region,
+                         "outputBoundsSRS": "epsg:4326",
+                         }
     elif isinstance(region, str):
         region_option = {"cutlineDSName": region}
     else:
@@ -198,7 +221,7 @@ def wapor_dl(region, variable,
 
     return data
 
-def wapor_map(region, variable, period, folder, overview = "NONE"):
+def wapor_map(region, variable, period, folder, l3_region = None, overview = "NONE"):
 
     ## Check if raw-data will be downloaded.
     if overview != "NONE":
@@ -209,7 +232,8 @@ def wapor_map(region, variable, period, folder, overview = "NONE"):
         os.makedirs(folder)
 
     ## Call wapor_dl to create a GeoTIFF.
-    fp = wapor_dl(region, variable, 
+    fp = wapor_dl(region, variable,
+                  l3_region = l3_region,
                   folder = folder, 
                   period = period,
                   overview = overview,
@@ -217,7 +241,7 @@ def wapor_map(region, variable, period, folder, overview = "NONE"):
                   )
     return fp
 
-def wapor_ts(region, variable, period, overview, 
+def wapor_ts(region, variable, period, overview, l3_region = None,
              req_stats = ["minimum", "maximum", "mean"]):
     
     ## Check if valid statistics have been selected.
@@ -233,6 +257,7 @@ def wapor_ts(region, variable, period, overview,
     ## Call wapor_dl to create a timeseries.
     df = wapor_dl(
             region, variable, 
+            l3_region = l3_region,
             period = period, 
             overview = overview, 
             req_stats = req_stats,
@@ -240,6 +265,11 @@ def wapor_ts(region, variable, period, overview,
              )
     
     return df
+
+def l3_codes(variable):
+    public_urls = generate_urls_v3(variable)
+    valids = np.unique([os.path.split(x)[-1].split(".")[2] for x in public_urls])
+    return valids.tolist()
 
 if __name__ == "__main__":
 
@@ -254,9 +284,14 @@ if __name__ == "__main__":
 
     period = ["2021-01-01", "2021-03-01"]
     req_stats = ["minimum", "maximum", "mean"]
-    variable = "L2-AETI-D"
+    variable = "L3-T-D"
 
     folder = r"/Users/hmcoerver/Local/test"
 
-    df1 = wapor_ts(region, "L2-AETI-D", period, overview)
+    l3_region = "BKA"
+    region = [35.75,33.70,35.82,33.75]
+
+    # df1 = wapor_ts(region, "L2-AETI-D", period, overview)
+
+    # out = wapor_dl(bb, variable, l3_region, period = period, folder = folder)
 

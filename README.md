@@ -56,15 +56,27 @@ To download a timeseries and a geotiff for a bounding-box:
     df = wapor_ts(bb, variable, period, overview)
     fp = wapor_map(bb, variable, period, folder)
 
+To work with level-3 data a region-code needs to be specified and the region/bb argument is optional:
+    
+    bb = [35.75, 33.70, 35.82, 33.75]
+    folder = "path/to/some/output/folder"
+    variable = "L3-T-D"
+    period = ["2021-01-01", "2021-07-01"]
+    overview = 3
+    l3_region = "BKA"
+
+    df = wapor_ts(bb, variable, period, overview, l3_region = l3_region)
+    fp = wapor_map(None, variable, period, folder, l3_region = l3_region)
+
 ## Upcoming
 
 - ~~Download a region from a bounding-box (i.e. without a shape).~~ ✅
 - A progress bar.
-- A warning if the given shape doesnt cover an area for which data is available.
+- ~~A warning if the given shape doesnt cover an area for which data is available.~~ ✅
 - Automatic overview selection based on the size of the shape.
 - Support for other input formats besides geojson (e.g. shapefiles, geopackages etc.)
 - Support for other output formats besides geotiff (e.g. netcdf).
 - ~~Installation with conda.~~ ✅
 - More metadata in the output files.
 - ~~More log information.~~ ✅
-- Option to select region for Level-3 data.
+- ~~Option to select region for Level-3 data.~~ ✅

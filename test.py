@@ -1,5 +1,5 @@
+from wapordl import wapor_ts, wapor_map, wapor_dl
 import glob
-from wapordl import wapor_ts, wapor_map
 
 regions = glob.glob(r"/Users/hmcoerver/Local/wapor_validation/SHAPES/BASINS/*.geojson")
 folder = r"/Users/hmcoerver/Local/test"
@@ -12,6 +12,7 @@ overview = 3
 period = ["2021-01-01", "2021-03-01"]
 req_stats = ["minimum", "maximum", "mean"]
 variable = "L2-AETI-D"
+l3_region = "BKA"
 
 df1 = wapor_ts(region, "L2-AETI-D", period, overview)
 df2 = wapor_ts(region, "L2-AETI-M", period, overview)
@@ -45,10 +46,21 @@ fp10 = wapor_map(bb, "L1-AETI-D", period, folder)
 fp11 = wapor_map(bb, "L1-AETI-M", period, folder)
 fp12 = wapor_map(bb, "L1-AETI-A", period, folder)
 
+fp13 = wapor_map(None, "L3-T-D", period, folder, l3_region = l3_region)
+fp14 = wapor_map([35.75,33.70,35.82,33.75], "L3-T-D", period, folder, l3_region = l3_region)
+
 try:
     _ = wapor_ts(bb, "L3-AETI-A", period, overview)
 except ValueError as e:
-    if "Level-3 data will be available soon." in str(e):
+    if "Please specify a `l3_region`" in str(e):
+        print("succes")
+    else:
+        raise e
+    
+try:
+    _ = wapor_ts(bb, "L3-AETI-A", period, overview, l3_region = "BLABLA")
+except ValueError as e:
+    if "Invalid `l3_region`, please specify one of" in str(e):
         print("succes")
     else:
         raise e
@@ -84,11 +96,19 @@ except ValueError as e:
         print("succes")
     else:
         raise e
-    
+
 try:
     _ = wapor_ts(bb, "L1-AETI-W", period, overview)
 except ValueError as e:
     if "Invalid temporal resolution." in str(e):
+        print("succes")
+    else:
+        raise e
+    
+try:
+    _ = wapor_dl(bb, "L3-T-D", l3_region = l3_region, period = period)
+except ValueError as e:
+    if "has no overlap with the datasets" in str(e):
         print("succes")
     else:
         raise e
