@@ -1,3 +1,5 @@
+![downloads](https://img.shields.io/pypi/dw/wapordl) [![version](https://img.shields.io/pypi/v/wapordl)](https://anaconda.org/conda-forge/wapordl)
+
 # WaPORDL
 
 This package allows users to download data from the WaPOR3 dataset as spatially aggregated timeseries or as spatial data clipped to a bounding-box or shapefile.
@@ -32,6 +34,12 @@ To download a timeseries for a certain region:
     >>> 17      0.0     4.60  2.364  2021-06-21
     >>> 18      0.0     5.40  2.325  2021-07-01
 
+    df.attrs
+
+    >>> {'long_name': 'Actual EvapoTranspiration and Interception',
+    >>> 'units': 'mm/day',
+    >>> 'overview': 3}
+
 To download a geotiff for a certain region and period of time:
 
     region = "path/to/some/my_region.geojson"
@@ -45,7 +53,7 @@ To download a geotiff for a certain region and period of time:
 
     >>> 'path/to/some/output/folder/my_region_L2-AETI-D_NONE.tif'
 
-To download a timeseries and a geotiff for a bounding-box:
+To download a timeseries and a netcdf for a bounding-box:
 
     bb = [25, -17, 26, -16]
     folder = "path/to/some/output/folder"
@@ -54,9 +62,9 @@ To download a timeseries and a geotiff for a bounding-box:
     overview = 3
 
     df = wapor_ts(bb, variable, period, overview)
-    fp = wapor_map(bb, variable, period, folder)
+    fp = wapor_map(bb, variable, period, folder, extenstion = ".nc")
 
-When working with level-3 data, a region-code needs to be specified and the region argument can be set to `None`:
+When working with level-3 data, a region-code needs to be specified and the region argument can (optionally) be set to `None`:
     
     region = "path/to/some/my_region.geojson"
     folder = "path/to/some/output/folder"
@@ -70,13 +78,14 @@ When working with level-3 data, a region-code needs to be specified and the regi
 
 ## Upcoming
 
+- Automatic overview selection based on the size of the shape.
 - ~~Download a region from a bounding-box (i.e. without a shape).~~ ✅
 - ~~A progress bar.~~ ✅
 - ~~A warning if the given shape doesnt cover an area for which data is available.~~ ✅
-- Automatic overview selection based on the size of the shape.
-- Support for other input formats besides geojson (e.g. shapefiles, geopackages etc.)
-- Support for other output formats besides geotiff (e.g. netcdf).
+- ~~Support for other output formats besides geotiff (e.g. netcdf).~~ ✅
 - ~~Installation with conda.~~ ✅
-- More metadata in the output files.
+- ~~More metadata in the output files.~~ ✅
 - ~~More log information.~~ ✅
 - ~~Option to select region for Level-3 data.~~ ✅
+
+Got a feature-request or a question? Don't hesitate to contact me at bert.coerver@fao.org.

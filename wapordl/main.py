@@ -16,13 +16,28 @@ def collect_responses(url, info = ["code"]):
         response = requests.get(url_)
         response.raise_for_status()
         data = response.json()["response"]
-        if isinstance(info, list):
+        if isinstance(info, list) and "items" in data.keys():
             output += [tuple(x.get(y) for y in info) for x in data["items"]]
-        else:
+        elif "items" in data.keys():
             output += data["items"]
+        else:
+            output.append(data)
     if isinstance(info, list):
         output = sorted(output)
     return output
+
+def collect_metadata(variable):
+    if "L1" in variable:
+        base_url = f"https://data.apps.fao.org/gismgr/api/v2/catalog/workspaces/WAPOR-3/mapsets"
+    elif "L2" in variable:
+        base_url = f"https://data.apps.fao.org/gismgr/api/v2/catalog/workspaces/WAPOR-3/mapsets"
+    elif "L3" in variable:
+        base_url = f"https://data.apps.fao.org/gismgr/api/v2/catalog/workspaces/WAPOR-3/mosaicsets"
+    else:
+        raise ValueError
+    info = ["code", "measureCaption", "measureUnit"]
+    var_codes = {x[0]: {"long_name": x[1], "units": x[2]} for x in collect_responses(base_url, info = info)}
+    return var_codes[variable]
 
 def generate_urls_v3(variable):
     if "L1" in variable:
@@ -39,13 +54,18 @@ def generate_urls_v3(variable):
 
 def cog_dl(urls, region, out_fn, overview = "NONE", warp_kwargs = {}, vrt_options = {"separate": True}):
 
-    vrt_fn = out_fn.replace(".tif", ".vrt")
+    out_ext = os.path.splitext(out_fn)[-1]
+    valid_ext = {".nc": "netCDF", ".tif": "GTiff"}
+    valid_cos = {".nc": ["COMPRESS=DEFLATE", "FORMAT=NC4C"], ".tif": ["COMPRESS=LZW"]}
+    if not bool(np.isin(out_ext, list(valid_ext.keys()))):
+        raise ValueError(f"Please use one of {list(valid_ext.keys())} as extension for `out_fn`, not {out_ext}")
+    vrt_fn = out_fn.replace(out_ext, ".vrt")
 
     ## Build VRT with all the required data.
-    vrt_options = gdal.BuildVRTOptions(
+    vrt_options_ = gdal.BuildVRTOptions(
         **vrt_options
     )
-    vrt = gdal.BuildVRT(vrt_fn, ["/vsicurl/" + x[1] for x in urls], options = vrt_options)
+    vrt = gdal.BuildVRT(vrt_fn, ["/vsicurl/" + x[1] for x in urls], options = vrt_options_)
     vrt.FlushCache()
 
     if isinstance(region, list) or isinstance(region, tuple):
@@ -65,19 +85,32 @@ def cog_dl(urls, region, out_fn, overview = "NONE", warp_kwargs = {}, vrt_option
 
     ## Download the data.
     warp_options = gdal.WarpOptions(
+        format = valid_ext[out_ext],
         cropToCutline = True,
         overviewLevel = overview,
         multithread = True,
         targetAlignedPixels = True,
-        creationOptions = ["COMPRESS=LZW"],
+        creationOptions = valid_cos[out_ext],
         callback = _callback_func,
         **warp_kwargs,
         **region_option,
     )
     warp = gdal.Warp(out_fn, vrt_fn, options = warp_options)
+    waitbar.close()
+
+    if warp.RasterCount == len(urls):
+        for i, (md, _) in enumerate(urls):
+            if not isinstance(md, type(None)):
+                band = warp.GetRasterBand(i + 1)
+                band.SetMetadata(md)
+
     warp.FlushCache()
 
-    waitbar.close()
+    if os.path.isfile(vrt_fn):
+        try:
+            os.remove(vrt_fn)
+        except PermissionError:
+            ...
 
     return out_fn
 
@@ -86,6 +119,7 @@ def wapor_dl(region, variable,
              period = ["2021-01-01", "2022-01-01"], 
              overview = "NONE", 
              req_stats = ["minimum", "maximum", "mean"],
+             extension = ".tif",
              folder = None):
     """_summary_
 
@@ -180,9 +214,13 @@ def wapor_dl(region, variable,
         region_urls = public_urls
 
     ## Determine date for each url and filter on requested period.
-    date_urls = [(date_func(url), url) for url in region_urls]
+    md = collect_metadata(variable)
+    md["overview"] = overview
+    date_urls = [({"valid_time": date_func(url), **md}, url) for url in region_urls]
+
+    ## TODO: Check if these filters can be applied directly in the API Query.
     if not isinstance(period, type(None)):
-        date_urls = [x for x in date_urls if (x[0] >= period[0]) & (x[0] <= period[1])]
+        date_urls = [x for x in date_urls if (x[0]["valid_time"] >= period[0]) & (x[0]["valid_time"] <= period[1])]
         ## Print overview statement.
         print(f"Found {len(date_urls)} files for {variable} between {period[0]} and {period[1]}.")
     else:
@@ -217,9 +255,9 @@ def wapor_dl(region, variable,
     if folder:
         if not os.path.isdir(folder):
             os.makedirs(folder)
-        warp_fn = os.path.join(folder, f"{region_code}_{variable}_{overview}.tif")
+        warp_fn = os.path.join(folder, f"{region_code}_{variable}_{overview}{extension}")
     else:
-        warp_fn = f"/vsimem/{region_code}_{variable}_{overview}.tif"
+        warp_fn = f"/vsimem/{region_code}_{variable}_{overview}{extension}"
 
     warp_fn = cog_dl(date_urls, region, warp_fn, overview = overview_, warp_kwargs = warp_kwargs)
 
@@ -228,7 +266,8 @@ def wapor_dl(region, variable,
         stats = gdal.Info(warp_fn, format = "json", stats = True)
         data = {statistic: [x["stats"][statistic] for x in stats["stac"]["raster:bands"]] for statistic in req_stats}
         data = pd.DataFrame(data) * scale
-        data["date"] = [x[0] for x in date_urls]
+        data["date"] = [x[0]["valid_time"] for x in date_urls]
+        data.attrs = md
     else:
         data = warp_fn
 
@@ -240,7 +279,7 @@ def wapor_dl(region, variable,
 
     return data
 
-def wapor_map(region, variable, period, folder, l3_region = None, overview = "NONE"):
+def wapor_map(region, variable, period, folder, l3_region = None, overview = "NONE", extension = ".tif"):
 
     ## Check if raw-data will be downloaded.
     if overview != "NONE":
@@ -256,6 +295,7 @@ def wapor_map(region, variable, period, folder, l3_region = None, overview = "NO
                   folder = folder, 
                   period = period,
                   overview = overview,
+                  extension = extension,
                   req_stats = None,
                   )
     return fp
@@ -313,4 +353,3 @@ if __name__ == "__main__":
     # df1 = wapor_ts(region, "L2-AETI-D", period, overview)
 
     # out = wapor_dl(bb, variable, l3_region, period = period, folder = folder)
-

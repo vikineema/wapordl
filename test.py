@@ -1,4 +1,7 @@
 from wapordl import wapor_ts, wapor_map, wapor_dl
+import pandas as pd
+from osgeo import gdal
+import numpy as np
 import glob
 
 regions = glob.glob(r"/Users/hmcoerver/Local/wapor_validation/SHAPES/BASINS/*.geojson")
@@ -9,12 +12,19 @@ bb = [25, -17, 26, -16]
 
 overview = 3
 
-period = ["2021-01-01", "2021-03-01"]
+period = ["2021-01-01", "2021-02-01"]
 req_stats = ["minimum", "maximum", "mean"]
 variable = "L2-AETI-D"
 l3_region = "BKA"
 
 df1 = wapor_ts(region, "L2-AETI-D", period, overview)
+assert df1.iloc[0].date == pd.Timestamp('2021-01-01 00:00:00')
+assert df1.attrs == {
+    'long_name': 'Actual EvapoTranspiration and Interception',
+    'units': 'mm/day',
+    'overview': overview
+    }
+
 df2 = wapor_ts(region, "L2-AETI-M", period, overview)
 df3 = wapor_ts(region, "L2-AETI-A", period, overview)
 
@@ -31,6 +41,18 @@ df11 = wapor_ts(bb, "L1-AETI-M", period, overview)
 df12 = wapor_ts(bb, "L1-AETI-A", period, overview)
 
 fp1 = wapor_map(region, "L2-AETI-D", period, folder)
+ds = gdal.Open(fp1)
+assert ds.RasterCount == 4
+band = ds.GetRasterBand(1)
+ndv = band.GetNoDataValue()
+scale = band.GetScale()
+array = band.ReadAsArray() * scale
+array[array == ndv*scale] = np.nan
+mean = np.nanmean(array)
+assert mean > 0.0
+assert mean < 15.0
+ds = ds.FlushCache()
+
 fp2 = wapor_map(region, "L2-AETI-M", period, folder)
 fp3 = wapor_map(region, "L2-AETI-A", period, folder)
 
@@ -46,8 +68,18 @@ fp10 = wapor_map(bb, "L1-AETI-D", period, folder)
 fp11 = wapor_map(bb, "L1-AETI-M", period, folder)
 fp12 = wapor_map(bb, "L1-AETI-A", period, folder)
 
-fp13 = wapor_map(None, "L3-T-D", period, folder, l3_region = l3_region)
-fp14 = wapor_map([35.75,33.70,35.82,33.75], "L3-T-D", period, folder, l3_region = l3_region)
+fp13 = wapor_map(region, "L1-AETI-D", period, folder, extension=".nc")
+
+fp14 = wapor_map(None, "L3-T-D", period, folder, l3_region = l3_region)
+fp15 = wapor_map([35.75,33.70,35.82,33.75], "L3-T-D", period, folder, l3_region = l3_region)
+
+try:
+    _ = wapor_map(region, "L1-AETI-M", period, folder, extension=".vrt")
+except ValueError as e:
+    if "Please use one of " in str(e):
+        print("succes")
+    else:
+        raise e
 
 try:
     _ = wapor_ts(bb, "L3-AETI-A", period, overview)
