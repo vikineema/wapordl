@@ -71,7 +71,7 @@ When working with level-3 data, a region-code needs to be specified and the regi
 ## Upcoming
 
 - ~~Download a region from a bounding-box (i.e. without a shape).~~ ✅
-- A progress bar.
+- ~~A progress bar.~~ ✅
 - ~~A warning if the given shape doesnt cover an area for which data is available.~~ ✅
 - Automatic overview selection based on the size of the shape.
 - Support for other input formats besides geojson (e.g. shapefiles, geopackages etc.)

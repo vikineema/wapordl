@@ -12,5 +12,6 @@ setup(
         "numpy",
         "gdal>=3.4.0",
         "shapely>=2.0.0",
+        "tqdm",
     ],
 )

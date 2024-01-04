@@ -4,6 +4,7 @@ import logging
 import shapely
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 from osgeo import gdal
 gdal.UseExceptions()
 
@@ -56,6 +57,12 @@ def cog_dl(urls, region, out_fn, overview = "NONE", warp_kwargs = {}, vrt_option
     else:
         region_option = {}
 
+    # Create waitbar.
+    waitbar = tqdm(desc = f"Downloading {len(urls)} COGs", leave = False, total = 100, bar_format='{l_bar}{bar}|')
+    # Define callback function for waitbar progress.
+    def _callback_func(info, *args):
+        waitbar.update(info * 100 - waitbar.n)
+
     ## Download the data.
     warp_options = gdal.WarpOptions(
         cropToCutline = True,
@@ -63,11 +70,14 @@ def cog_dl(urls, region, out_fn, overview = "NONE", warp_kwargs = {}, vrt_option
         multithread = True,
         targetAlignedPixels = True,
         creationOptions = ["COMPRESS=LZW"],
+        callback = _callback_func,
         **warp_kwargs,
         **region_option,
     )
     warp = gdal.Warp(out_fn, vrt_fn, options = warp_options)
     warp.FlushCache()
+
+    waitbar.close()
 
     return out_fn
 
