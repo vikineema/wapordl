@@ -36,18 +36,18 @@ def generate_urls_v3(variable):
     urls = [x[0] for x in collect_responses(mapset_url, info = ["downloadUrl"])]
     return tuple(sorted(urls))
 
-def cog_dl(urls: list, region: str, out_fn: str, overview = "NONE", warp_kwargs = {}):
+def cog_dl(urls, region, out_fn, overview = "NONE", warp_kwargs = {}, vrt_options = {"separate": True}):
 
     vrt_fn = out_fn.replace(".tif", ".vrt")
 
     ## Build VRT with all the required data.
     vrt_options = gdal.BuildVRTOptions(
-        separate=True,
+        **vrt_options
     )
     vrt = gdal.BuildVRT(vrt_fn, ["/vsicurl/" + x[1] for x in urls], options = vrt_options)
     vrt.FlushCache()
 
-    if isinstance(region, list):
+    if isinstance(region, list) or isinstance(region, tuple):
         region_option = {"outputBounds": region,
                          "outputBoundsSRS": "epsg:4326",
                          }
