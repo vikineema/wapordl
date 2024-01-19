@@ -6,6 +6,8 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from osgeo import gdal
+from osgeo_utils import gdal_calc
+from string import ascii_lowercase, ascii_uppercase
 gdal.UseExceptions()
 logging.basicConfig(encoding='utf-8', level=logging.INFO, format='%(levelname)s: %(message)s')
 
@@ -123,7 +125,7 @@ def generate_urls_v3(variable, l3_region = None, period = None):
     
     return tuple(sorted(urls))
 
-def cog_dl(urls, out_fn, overview = "NONE", warp_kwargs = {}, vrt_options = {"separate": True}):
+def cog_dl(urls, out_fn, overview = "NONE", warp_kwargs = {}, vrt_options = {"separate": True}, unit_conversion = "none"):
 
     out_ext = os.path.splitext(out_fn)[-1]
     valid_ext = {".nc": "netCDF", ".tif": "GTiff"}
@@ -158,8 +160,53 @@ def cog_dl(urls, out_fn, overview = "NONE", warp_kwargs = {}, vrt_options = {"se
     )
     warp = gdal.Warp(out_fn, vrt_fn, options = warp_options)
     waitbar.close()
+    nbands = warp.RasterCount
+    
+    if nbands == len(urls) and unit_conversion != "none":
+        input_files = dict()
+        input_bands = dict()
+        calc = list()
+        for i, (md, _) in enumerate(urls):
+            band_number = i+1
+            letters = ascii_lowercase[i] # TODO make sure letters is longer than RasterCount
+            input_files[letters] = out_fn
+            input_bands[f"{letters}_band"] = band_number
+            number_of_days = md.get("number_of_days", "unknown") # TODO handle "unknown"
+            days_in_month = pd.Timestamp(md.get("start_date", "unknown")).daysinmonth # TODO handle "unknown"
+            source_unit = md.get("units", "unknown") # TODO handle "unknown"
+            source_unit_q, source_unit_time = source_unit.split("/") # TODO what if there is no "/" in the string
+            conversion = {
+                ("day", "day"): 1,
+                ("day", "dekad"): number_of_days,
+                ("day", "month"): days_in_month,
+                ("day", "year"): 365,
+                ("month", "day"): 1/days_in_month,
+                ("month", "dekad"): 1/3,
+                ("month", "month"): 1,
+                ("month", "year"): 12,
+                ("year", "dekad"): 1/36,
+                ("year", "day"): 1/365,
+                ("year", "month"): 1/12,
+                ("year", "year"): 1,
+            }[(source_unit_time, unit_conversion)]
+            calc.append(f"{letters}*{conversion}")
+            md["units"] = f"{source_unit_q}/{unit_conversion}"
+            md["unit_conversion"] = f"[{source_unit}] --*{conversion:.3f}--> [{source_unit_q}/{unit_conversion}]"
 
-    if warp.RasterCount == len(urls):
+        logging.debug(f"input_files: {input_files}\ninput_bands: {input_bands}\ncalc: {calc}")
+        logging.info(f"Convertin units: [{source_unit}] --> [{source_unit_q}/{unit_conversion}]")
+
+        warp.FlushCache()
+        warp = gdal_calc.Calc(
+            calc = calc,
+            outfile = out_fn,
+            overwrite = True,
+            quiet = True,
+            **input_files,
+            **input_bands,
+            )
+
+    if nbands == len(urls):
         for i, (md, _) in enumerate(urls):
             if not isinstance(md, type(None)):
                 band = warp.GetRasterBand(i + 1)
@@ -272,7 +319,7 @@ def wapor_dl(region, variable,
         "yRes": abs(yres) * 2**(overview_ + 1),
     }
 
-    if isinstance(region, list) or isinstance(region, tuple):
+    if isinstance(region, list):
         warp_kwargs["outputBounds"] = region
         warp_kwargs["outputBoundsSRS"] = "epsg:4326"
     elif isinstance(region, str):
@@ -403,12 +450,6 @@ if __name__ == "__main__":
     period = ["2021-01-01", "2021-03-01"]
     req_stats = ["minimum", "maximum", "mean"]
     variable = "L2-T-D"
+    extension = ".tif"
 
     folder = r"/Users/hmcoerver/Local/test"
-
-    # l3_region = "BKA"
-    # region = [35.75,33.70,35.82,33.75]
-
-    # df1 = wapor_ts(region, "L2-AETI-D", period, overview)
-
-    # out = wapor_dl(bb, variable, l3_region, period = period, folder = folder)
