@@ -1,0 +1,8 @@
+{
+"type": "FeatureCollection",
+"name": "test_FAIL",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+"features": [
+{ "type": "Feature", "properties": { "id": null }, "geometry": { "type": "MultiPolygon", "coordinates": [ [ [ [ 30.049547526222828, -1.186905384565218 ], [ 30.195838604864132, -1.201430739891304 ], [ 30.171975521114131, -1.607103163641304 ], [ 29.990408579538045, -1.335271513967391 ], [ 30.049547526222828, -1.186905384565218 ] ] ] ] } }
+]
+}
