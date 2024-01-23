@@ -44,7 +44,7 @@ To download a timeseries for a certain region:
 
 To download a timerseries and convert its unit provide the `unit_conversion` keyword:
 
-    unit_conversion = "dekad" # choose from "day", "month", "year", "none".
+    unit_conversion = "dekad" # options are "day", "month", "year", "none" (default).
 
     df = wapor_ts(region, variable, period, overview, unit_conversion = unit_conversion)
     
