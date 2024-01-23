@@ -23,18 +23,19 @@ nodata_period = ["2015-01-01", "2016-01-01"]
 req_stats = ["minimum", "maximum", "mean"]
 variable = "L2-AETI-D"
 l3_region = "BKA"
+extension = ".tif"
 
 ####
 # START TESTS
 ####
 
 df1 = wapor_ts(region, "L2-AETI-D", period, overview)
+assert np.isclose(df1.iloc[0]["mean"], 0.3923)
 assert df1.iloc[0].start_date == pd.Timestamp('2021-01-11 00:00:00')
 assert df1.attrs == {
-    'long_name': 'Actual EvapoTranspiration and Interception',
-    'units': 'mm/day',
-    'overview': overview
-    }
+ 'long_name': 'Actual EvapoTranspiration and Interception',
+ 'units': 'mm/day',
+ 'overview': 3}
 
 df2 = wapor_ts(region, "L2-AETI-M", period, overview)
 assert df2.attrs["units"] == "mm/month"
@@ -269,39 +270,163 @@ except ValueError as e:
         print("succes")
     else:
         raise e    
-
-# try:
-#     bb_south_america = [-68.203125,-18.979026,-55.371094,-6.839170]
-#     _ = wapor_map(bb_south_america, "L2-T-D", period, folder)
-# except ValueError as e:
-#     if "has no overlap with the datasets" in str(e):
-#         print("succes")
-#     else:
-#         raise e
     
+try:
+    _ = wapor_map(region, "L2-AETI-D", period, folder, unit_conversion = "pentad")
+except ValueError as e:
+    if "Please select one of " in str(e):
+        print("succes")
+    else:
+        raise e
+    
+try:
+    _ = wapor_ts(region, "L2-AETI-D", period, overview, unit_conversion = "pentad")
+except ValueError as e:
+    if "Please select one of " in str(e):
+        print("succes")
+    else:
+        raise e        
+
+try: # TODO this should return an error, need to make mask for L2 data.
+    bb_south_america = [-68.203125,-18.979026,-55.371094,-9.839170]
+    _ = wapor_map(bb_south_america, "L2-T-D", period, folder)
+except ValueError as e:
+    if "has no overlap with the datasets" in str(e):
+        print("succes")
+    else:
+        raise e
+
+#####
+# UNIT CONVERSION CHECKS
+#####
+
+periodX = ["2021-01-01", "2021-01-31"]
+
+# FROM DEKAD
+df_dekad_ref = wapor_ts(region, "L2-AETI-D", periodX, overview)
+df_dekad_day = wapor_ts(region, "L2-AETI-D", periodX, overview, unit_conversion = "day")
+assert df_dekad_day.attrs["units"] == "mm/day"
+assert np.all(df_dekad_ref["mean"] == df_dekad_day["mean"])
+df_dekad_dekad = wapor_ts(region, "L2-AETI-D", periodX, overview, unit_conversion = "dekad")
+assert np.all(np.isclose(df_dekad_ref["mean"] * df_dekad_ref.number_of_days.dt.days, df_dekad_dekad["mean"], atol = 0, rtol = 1e-3))
+assert df_dekad_dekad.attrs["units"] == "mm/dekad"
+df_dekad_month = wapor_ts(region, "L2-AETI-D", periodX, overview, unit_conversion = "month")
+assert np.all(np.isclose(df_dekad_ref["mean"] * 31, df_dekad_month["mean"], atol = 0, rtol = 1e-3))
+assert df_dekad_month.attrs["units"] == "mm/month"
+df_dekad_year = wapor_ts(region, "L2-AETI-D", periodX, overview, unit_conversion = "year")
+assert np.all(np.isclose(df_dekad_ref["mean"] * 365, df_dekad_year["mean"], atol = 0, rtol = 1e-3))
+assert df_dekad_year.attrs["units"] == "mm/year"
+
+# FROM MONTH
+df_month_ref = wapor_ts(region, "L2-AETI-M", periodX, overview)
+df_month_day = wapor_ts(region, "L2-AETI-M", periodX, overview, unit_conversion = "day")
+assert df_month_day.attrs["units"] == "mm/day"
+assert np.all(np.isclose(df_month_ref["mean"] / 31, df_month_day["mean"], atol = 0, rtol = 1e-2))
+df_month_dekad = wapor_ts(region, "L2-AETI-M", periodX, overview, unit_conversion = "dekad")
+assert np.all(np.isclose(df_month_ref["mean"] / 3, df_month_dekad["mean"], atol = 0, rtol = 1e-2))
+assert df_month_dekad.attrs["units"] == "mm/dekad"
+df_month_month = wapor_ts(region, "L2-AETI-M", periodX, overview, unit_conversion = "month")
+assert np.all(df_month_ref["mean"] == df_month_month["mean"])
+assert df_month_month.attrs["units"] == "mm/month"
+df_month_year = wapor_ts(region, "L2-AETI-M", periodX, overview, unit_conversion = "year")
+assert np.all(np.isclose(df_month_ref["mean"] * 12, df_month_year["mean"], atol = 0, rtol = 1e-3))
+assert df_month_year.attrs["units"] == "mm/year"
+
+# FROM YEAR
+df_year_ref = wapor_ts(region, "L2-AETI-A", periodX, overview)
+df_year_day = wapor_ts(region, "L2-AETI-A", periodX, overview, unit_conversion = "day")
+assert df_year_day.attrs["units"] == "mm/day"
+assert np.all(np.isclose(df_year_ref["mean"] / 365, df_year_day["mean"], atol = 0, rtol = 1e-2))
+df_year_dekad = wapor_ts(region, "L2-AETI-A", periodX, overview, unit_conversion = "dekad")
+assert np.all(np.isclose(df_year_ref["mean"] / 36, df_year_dekad["mean"], atol = 0, rtol = 1e-2))
+assert df_year_dekad.attrs["units"] == "mm/dekad"
+df_year_month = wapor_ts(region, "L2-AETI-A", periodX, overview, unit_conversion = "month")
+assert np.all(np.isclose(df_year_ref["mean"] / 12, df_year_month["mean"], atol = 0, rtol = 1e-3))
+assert df_year_month.attrs["units"] == "mm/month"
+df_year_year = wapor_ts(region, "L2-AETI-A", periodX, overview, unit_conversion = "year")
+assert np.all(df_year_ref["mean"] == df_year_year["mean"])
+assert df_year_year.attrs["units"] == "mm/year"
+
+# OTHER VARS
+df_aeti_dekad_per_dekad = wapor_ts(region, "L1-T-D", periodX, overview, unit_conversion="dekad")
+df_npp_dekad_per_dekad = wapor_ts(region, "L1-NPP-D", periodX, overview, unit_conversion="dekad")
+assert np.all(df_npp_dekad_per_dekad["minimum"]) >= 0
+df_rsm_dekad_per_dekad = wapor_ts(region, "L1-RSM-D", periodX, overview, unit_conversion="dekad")
+assert np.all(df_rsm_dekad_per_dekad["minimum"]) >= 0.0
+assert np.all(df_rsm_dekad_per_dekad["maximum"]) <= 1.0
+
+fp19 = wapor_map(region, "L2-AETI-D", periodX, folder, unit_conversion="dekad")
+ds = gdal.Open(fp19)
+assert ds.RasterCount == 3
+band = ds.GetRasterBand(1)
+ndv = band.GetNoDataValue()
+scale = band.GetScale()
+assert not isinstance(scale, type(None))
+array = band.ReadAsArray() * scale
+array[array == ndv*scale] = np.nan
+mean = np.nanmean(array)
+md = band.GetMetadata()
+assert md == {'end_date': '2021-01-10',
+ 'long_name': 'Actual EvapoTranspiration and Interception',
+ 'number_of_days': '10',
+ 'original_units': 'mm/day',
+ 'overview': 'NONE',
+ 'start_date': '2021-01-01',
+ 'units': 'mm/dekad',
+ 'units_conversion_factor': '10'}
+assert mean > 0.0
+assert mean < 25.0
+proj = osr.SpatialReference(wkt=ds.GetProjection())
+assert proj.GetAttrValue('AUTHORITY',1) == "4326"
+ds = ds.FlushCache()
+
+fp20 = wapor_map(region, "L2-AETI-D", period, folder, extension= ".nc", unit_conversion="dekad")
+info = gdal.Info(fp20, format = "json")
+assert len(info["metadata"]["SUBDATASETS"]) == 4
+ds = gdal.Open(info["metadata"]["SUBDATASETS"]["SUBDATASET_1_NAME"])
+band = ds.GetRasterBand(1)
+md = band.GetMetadata()
+scale = band.GetScale()
+assert not isinstance(scale, type(None))
+array = band.ReadAsArray() * scale
+ndv = band.GetNoDataValue()
+array[array == ndv*scale] = np.nan
+mean = np.nanmean(array)
+assert mean > 0.0
+assert mean < 15.0
+proj = osr.SpatialReference(wkt=ds.GetProjection())
+assert proj.GetAttrValue('AUTHORITY',1) == "4326"
+ds = ds.FlushCache()
+
 #####
 # SUMMATION CHECK
 #####
     
 bb = [30.2, 28.6, 31.3, 30.5]
-folder = "/Users/hmcoerver/Local/wapordl_test"
 variable = "L2-AETI-D"
 period = ["2018-01-01", "2018-12-31"]
 
 fp_a_nc = wapordl.wapor_map(bb, "L2-AETI-A", period, folder, extension = ".nc")
 fp_d_nc = wapordl.wapor_map(bb, "L2-AETI-D", period, folder, extension = ".nc")
+fp_dd_nc = wapordl.wapor_map(bb, "L2-AETI-D", period, folder, extension = ".nc", unit_conversion = "dekad")
 
 ds_d = xr.open_dataset(fp_d_nc, decode_coords = "all")
 coords = [np.datetime64(da.attrs["start_date"], "ns") for da in ds_d.data_vars.values()]
 da_d = ds_d.to_array("time").assign_coords({"time": coords})
-
 length = xr.where(da_d["time"].dt.day != 21, 10, da_d["time"].dt.daysinmonth - 20)
 da_d = (da_d * length).sum(dim = "time")
+
+ds_dd = xr.open_dataset(fp_dd_nc, decode_coords="all")
+coords = [np.datetime64(da.attrs["start_date"], "ns") for da in ds_dd.data_vars.values()]
+da_dd = ds_dd.to_array("time").assign_coords({"time": coords})
+da_dd = da_dd.sum(dim = "time")
 
 ds_a = xr.open_dataset(fp_a_nc, decode_coords = "all")
 da_a = ds_a["Band1"]
 
 assert abs((da_a - da_d).mean().values) < 0.00001
+assert abs((da_a - da_dd).mean().values) < 0.00001
+assert abs((da_d - da_dd).mean().values) < 0.00001
     
 # fig, axs = plt.subplots(1, 2, figsize = (15, 5))
 # da_d.plot(ax = axs[0])
