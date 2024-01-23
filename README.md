@@ -92,7 +92,7 @@ To download a timeseries and a netcdf for a bounding-box:
 ```python
 region = [25, -17, 26, -16]
 folder = "path/to/some/output/folder"
-variable = "L2-AETI-D"
+variable = "L3-AETI-D"
 period = ["2021-01-01", "2021-07-01"]
 overview = 3
 
