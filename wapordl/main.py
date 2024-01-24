@@ -391,7 +391,7 @@ def wapor_dl(region, variable,
 
     ## Determine date for each url.
     md = collect_metadata(variable)
-    ## NOTE This should be corrected in the GISMGR2.0 API instead of here:
+    ## TODO This should be corrected in the GISMGR2.0 API instead of here:
     if all([
         "NPP" in var_code, 
         "year" not in md["units"], 

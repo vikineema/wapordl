@@ -2,7 +2,7 @@
 
 # WaPORDL
 
-This package allows users to download data from the WaPOR3 dataset as spatially aggregated timeseries or as spatial data clipped to a bounding-box or shapefile.
+Download data from the WaPOR3 dataset as spatially aggregated timeseries or as spatial data clipped to a bounding-box or shapefile.
 
 ## Installation
 
@@ -47,9 +47,9 @@ df.attrs
 To download a timerseries and convert its unit provide the `unit_conversion` keyword:
 
 ```python
-unit_conversion = "dekad" # or choose "day", "month", "year", "none" (default).
+unit = "dekad" # or choose "day", "month", "year", "none" (default).
 
-df = wapor_ts(region, variable, period, overview, unit_conversion = unit_conversion)
+df = wapor_ts(region, variable, period, overview, unit_conversion = unit)
 
 df
 
@@ -90,7 +90,7 @@ fp
 To download a timeseries and a netcdf for a bounding-box:
 
 ```python
-region = [25, -17, 26, -16] # [xmin, ymin, xmax, ymax]
+region = [35.75, 33.70, 35.82, 33.75] # [xmin, ymin, xmax, ymax]
 folder = "path/to/some/output/folder"
 variable = "L3-AETI-D"
 period = ["2021-01-01", "2021-07-01"]
@@ -108,10 +108,9 @@ folder = "path/to/some/output/folder"
 variable = "L3-T-D"
 period = ["2021-01-01", "2021-07-01"]
 overview = 3
-unit_conversion = "year"
 
 df = wapor_ts(region, variable, period, overview)
-fp = wapor_map(region, variable, period, folder, unit_conversion = unit_conversion)
+fp = wapor_map(region, variable, period, folder, unit_conversion = "year")
 ```
 
 ## Upcoming

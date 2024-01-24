@@ -10,6 +10,8 @@
 *__pycache__
 *.pytest_cache
 
+
+
 # Compiled Python bytecode
 *.py[cod]
 
@@ -26,6 +28,7 @@
 *.code-workspace
 .vscode/
 
+benchmark/
 devs/
 dist/
 build/
