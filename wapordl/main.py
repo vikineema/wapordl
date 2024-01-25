@@ -143,7 +143,7 @@ def generate_urls_v3(variable, l3_region = None, period = None):
         mapset_url += f"{tres_translator[tres]}:OVERLAPS:{period[0]}:{period[1]};"
     
     urls = [x[0] for x in collect_responses(mapset_url, info = ["downloadUrl"])]
-    
+
     return tuple(sorted(urls))
 
 def __make_band_names__(length):
@@ -391,14 +391,6 @@ def wapor_dl(region, variable,
 
     ## Determine date for each url.
     md = collect_metadata(variable)
-    ## TODO This should be corrected in the GISMGR2.0 API instead of here:
-    if all([
-        "NPP" in var_code, 
-        "year" not in md["units"], 
-        "month" not in md["units"], 
-        "day" not in md["units"]
-        ]):
-        md["units"] += {"D": "/day", "M": "/month", "A": "/year"}[tres]
     md["overview"] = overview
     md_urls = [({**date_func(url, tres), **md}, url) for url in urls]
 
@@ -569,6 +561,6 @@ if __name__ == "__main__":
     unit_conversion = "dekad"
     folder = r"/Users/hmcoerver/Local/test"
 
-    map1 = wapor_map(region, variable, period, folder, unit_conversion=unit_conversion)
-    map2 = wapor_map(region, variable, period, folder, unit_conversion=unit_conversion, extension=extension)
+    # map1 = wapor_map(region, variable, period, folder, unit_conversion=unit_conversion)
+    # map2 = wapor_map(region, variable, period, folder, unit_conversion=unit_conversion, extension=extension)
 
