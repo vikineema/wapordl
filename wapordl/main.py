@@ -612,7 +612,10 @@ if __name__ == "__main__":
     folder = r"/Users/hmcoerver/Local/test"
 
     region = "BKA"
+    
+    # TODO fix unit of L1-PCP-E in GISMGR2 metadata (should be mm/day instead of mm).
     variable = "L1-PCP-E"
+
     period = ["2023-01-01", "2023-02-04"]
     unit_conversion = "none"
     overview = "NONE"
