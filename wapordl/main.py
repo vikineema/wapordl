@@ -5,9 +5,8 @@ import shapely
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-from osgeo import gdal
+from osgeo import gdal, gdalconst
 from osgeo_utils import gdal_calc
-from osgeo import gdalconst
 from string import ascii_lowercase, ascii_uppercase
 gdal.UseExceptions()
 logging.basicConfig(encoding='utf-8', level=logging.INFO, format='%(levelname)s: %(message)s')
@@ -93,10 +92,17 @@ def collect_responses(url, info = ["code"]):
 
 def date_func(url, tres):
     if tres == "D":
+        # if "AGERA5" in url:
+        #     year_acc_dekad = os.path.split(url)[-1].split("_")[-1].split(".")[0]
+        #     year = year_acc_dekad[:4]
+        #     acc_dekad = int(year_acc_dekad[-2:])
+        #     month = str((acc_dekad - 1) // 3 + 1).zfill(2)
+        #     dekad = str((acc_dekad - 1) % 3 + 1)
+        # else:
         year, month, dekad = os.path.split(url)[-1].split(".")[-2].split("-")
-        start_day = {'D1': '01', 'D2': '11', 'D3': '21'}[dekad]
+        start_day = {'D1': '01', 'D2': '11', 'D3': '21', '1': '01', '2': '11', '3': '21'}[dekad]
         start_date = f"{year}-{month}-{start_day}"
-        end_day = {'D1': '10', 'D2': '20', 'D3': pd.Timestamp(start_date).daysinmonth}[dekad]
+        end_day = {'D1': '10', 'D2': '20', 'D3': pd.Timestamp(start_date).daysinmonth, '1': '10', '2': '20', '3': pd.Timestamp(start_date).daysinmonth}[dekad]
         end_date = f"{year}-{month}-{end_day}"
     elif tres == "M":
         year, month = os.path.split(url)[-1].split(".")[-2].split("-")
@@ -106,12 +112,19 @@ def date_func(url, tres):
         year = os.path.split(url)[-1].split(".")[-2]
         start_date = f"{year}-01-01"
         end_date = f"{year}-12-31"
+    elif tres == "E":
+        year, month, start_day = os.path.split(url)[-1].split(".")[-2].split("-")
+        start_date = end_date = f"{year}-{month}-{start_day}"
     else:
         raise ValueError("Invalid temporal resolution.") # NOTE: TESTED
     number_of_days = (pd.Timestamp(end_date) - pd.Timestamp(start_date) + pd.Timedelta(1, "D")).days
     return {"start_date": start_date, "end_date": end_date, "number_of_days": number_of_days}
 
 def collect_metadata(variable):
+
+    # if variable == "L1-ET0-D":
+    #     return {"long_name": "Reference Evapotranspiration", "units": "mm/dekad", "source": "FAO56 with agERA5"}
+    
     if "L1" in variable:
         base_url = f"https://data.apps.fao.org/gismgr/api/v2/catalog/workspaces/WAPOR-3/mapsets"
     elif "L2" in variable:
@@ -124,6 +137,28 @@ def collect_metadata(variable):
     var_codes = {x[0]: {"long_name": x[1], "units": x[2]} for x in collect_responses(base_url, info = info)}
     return var_codes[variable]
 
+def make_dekad_dates(period):
+    period_ = [pd.Timestamp(x) for x in period]
+
+    syear = period_[0].year
+    smonth = period_[0].month
+    eyear = period_[1].year
+    emonth = period_[1].month
+
+    x1 = pd.date_range(f"{syear}-{smonth}-01", f"{eyear}-{emonth}-01", freq = "MS")
+    x2 = x1 + pd.Timedelta("10 days")
+    x3 = x1 + pd.Timedelta("20 days")
+    x = np.sort(np.concatenate((x1, x2, x3)))
+
+    x_filtered = [pd.Timestamp(x_) for x_ in x if x_ >= period_[0] and x_ < period_[1]]
+    return x_filtered
+
+def generate_urls_agERA5(period):
+    base_url = "https://data.apps.fao.org/static/data/c3s/AGERA5_ET0_D/AGERA5_ET0_{year}D{acc_dekad:>02}.tif"
+    x_filtered = make_dekad_dates(period)
+    urls = [base_url.format(year = x.year, acc_dekad = (x.month - 1)*3 + {1: 1, 11: 2, 21: 3}[x.day]) for x in x_filtered]
+    return tuple(sorted(urls))
+
 def generate_urls_v3(variable, l3_region = None, period = None):
     
     level, _, tres = variable.split("-")
@@ -134,14 +169,13 @@ def generate_urls_v3(variable, l3_region = None, period = None):
         base_url = f"https://data.apps.fao.org/gismgr/api/v2/catalog/workspaces/WAPOR-3/mosaicsets"
     else:
         raise ValueError(f"Invalid level {level}.") # NOTE: TESTED
-    
+
     mapset_url = f"{base_url}/{variable}/rasters?filter="
     if not isinstance(l3_region, type(None)):
         mapset_url += f"code:CONTAINS:{l3_region};"
     if not isinstance(period, type(None)):
-        tres_translator = {"D": "dekad", "M": "month", "A": "year"}
-        mapset_url += f"{tres_translator[tres]}:OVERLAPS:{period[0]}:{period[1]};"
-    
+        mapset_url += f"time:OVERLAPS:{period[0]}:{period[1]};"
+
     urls = [x[0] for x in collect_responses(mapset_url, info = ["downloadUrl"])]
 
     return tuple(sorted(urls))
@@ -175,7 +209,7 @@ def unit_convertor(urls, out_fn, unit_conversion, warp):
         source_unit_q = "/".join(source_unit_split[:-1])
         source_unit_time = source_unit_split[-1]
         if any([
-                source_unit_time not in ["day", "month", "year"],
+                source_unit_time not in ["day", "month", "year", "dekad"],
                 number_of_days == "unknown",
                 source_unit == "unknown",
                 pd.isnull(days_in_month)
@@ -191,6 +225,10 @@ def unit_convertor(urls, out_fn, unit_conversion, warp):
                 ("day", "dekad"): number_of_days,
                 ("day", "month"): days_in_month,
                 ("day", "year"): 365,
+                ("dekad", "day"): 1/number_of_days,
+                ("dekad", "month"): 3,
+                ("dekad", "year"): 36,
+                ("dekad", "dekad"): 1,
                 ("month", "day"): 1/days_in_month,
                 ("month", "dekad"): 1/3,
                 ("month", "month"): 1,
@@ -264,7 +302,8 @@ def cog_dl(urls, out_fn, overview = "NONE", warp_kwargs = {}, vrt_options = {"se
     vrt_options_ = gdal.BuildVRTOptions(
         **vrt_options
     )
-    vrt = gdal.BuildVRT(vrt_fn, ["/vsicurl/" + x[1] for x in urls], options = vrt_options_)
+    prepend = {False: "/vsicurl/", True: "/vsigzip//vsicurl/"}
+    vrt = gdal.BuildVRT(vrt_fn, [prepend[".gz" in x[1]] + x[1] for x in urls], options = vrt_options_)
     vrt.FlushCache()
 
     n_urls = len(urls)
@@ -346,10 +385,18 @@ def wapor_dl(region, variable,
             # not os.path.isfile(region),
             region in list(L3_BBS.keys()), 
             len(region) == 3]):
-        l3_region = region[:]
-        region = None
-        region_code = l3_region[:]
-        region_shape = None
+
+        if level == "L3":
+            l3_region = region[:] # three letter code to filter L3 datasets in GISMGR2.
+            region = None   # used for clipping, can be None, list(bb) or path/to/file.geojson.
+            region_code = l3_region[:] # string to name the region in filenames etc.
+            region_shape = None # polygon used to check if there is data for the region.
+        else:
+            l3_region = None
+            region_shape = shapely.Polygon(np.array(L3_BBS[region]))
+            region_code = region[:]
+            region = list(region_shape.bounds)
+
     elif isinstance(region, str):
         if not os.path.isfile(region) or os.path.splitext(region)[-1] != ".geojson":
             raise ValueError(f"Geojson file not found.") # NOTE: TESTED
@@ -398,7 +445,9 @@ def wapor_dl(region, variable,
 
     ## Determine required output resolution.
     # NOTE maybe move this to external function (assumes info the same for all urls)
-    info = gdal.Info("/vsicurl/" + md_urls[0][1], format = "json")
+    info_url = md_urls[0][1]
+    info_url = {False: "/vsicurl/", True: "/vsigzip//vsicurl/"}[".gz" in info_url] + info_url
+    info = gdal.Info(info_url, format = "json")
     overview_ = -1 if overview == "NONE" else overview
     xres, yres = info["geoTransform"][1::4]
     warp_kwargs = {
@@ -420,14 +469,15 @@ def wapor_dl(region, variable,
             data_bb = shapely.from_geojson(L2_BB)
         else:
             data_bb = shapely.Polygon(np.array(info["wgs84Extent"]["coordinates"])[0])
+        
         if not data_bb.intersects(region_shape):
             info_lbl1 = region_code if region_code != "bb" else str(region)
             info_lbl2 = variable if isinstance(l3_region, type(None)) else f"{variable}.{l3_region}"
             raise ValueError(f"Selected region ({info_lbl1}) has no overlap with the datasets ({info_lbl2}) bounding-box.")
 
     ## Get scale and offset factor.
-    scale = info["bands"][0]["scale"]
-    offset = info["bands"][0]["offset"]
+    scale = info["bands"][0].get("scale", 1)
+    offset = info["bands"][0].get("offset", 0)
 
     ## Check offset factor.
     if offset != 0:
@@ -551,15 +601,23 @@ def __l3_bounding_boxes__(variable = "L3-T-A"):
 
 if __name__ == "__main__":
 
-    region = "/Users/hmcoerver/Library/Mobile Documents/com~apple~CloudDocs/GitHub/wapordl/wapordl/test_data/1237500.geojson"
-    variable = "L1-AETI-D"
-    period = ["2021-01-12", "2021-01-28"]
-    overview = 3
-    unit_conversion = "none"
-    req_stats = ["minimum", "maximum", "mean"]
-    extension = ".nc"
-    unit_conversion = "dekad"
+    # region = r"/Users/hmcoerver/Library/Mobile Documents/com~apple~CloudDocs/GitHub/wapordl/wapordl/test_data/1237500.geojson"
+    # variable = "L1-AETI-D"
+    # period = ["2021-01-12", "2021-01-28"]
+    # overview = 3
+    # unit_conversion = "none"
+    # req_stats = ["minimum", "maximum", "mean"]
+    # extension = ".nc"
+    # unit_conversion = "dekad"
     folder = r"/Users/hmcoerver/Local/test"
+
+    region = "BKA"
+    variable = "L1-PCP-E"
+    period = ["2023-01-01", "2023-02-04"]
+    unit_conversion = "none"
+    overview = "NONE"
+    extension = ".tif"
+    req_stats = None
 
     # map1 = wapor_map(region, variable, period, folder, unit_conversion=unit_conversion)
     # map2 = wapor_map(region, variable, period, folder, unit_conversion=unit_conversion, extension=extension)
