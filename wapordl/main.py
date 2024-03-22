@@ -34,6 +34,12 @@ L3_BBS = {
     'SAN': [[43.9733487, 15.607452], [43.9752772, 15.2142363], [44.4893856, 15.2159917], [44.4884245, 15.609255], [43.9733487, 15.607452]], 
     'SED': [[-16.2610895, 16.4920046], [-16.2593842, 16.2262901], [-15.8685096, 16.22825], [-15.8696858, 16.4939983], [-16.2610895, 16.4920046]], 
     'YAN': [[29.9186281, -1.7554126], [29.9189336, -1.9422648], [30.0389016, -1.9420519], [30.0385836, -1.7552203], [29.9186281, -1.7554126]],
+    'ENO': [[29.0486593, 31.5729461], [29.2216818, 26.984181], [33.0969909, 27.0348598], [33.1014462, 31.6340632], [29.0486593, 31.5729461]],
+    'KMW': [[37.1712454, -0.5521456], [37.1711311, -0.847298], [37.5827814, -0.8474716], [37.58287, -0.5522587], [37.1712454, -0.5521456]],
+    'KTB': [[39.8040688, -1.0763414], [39.8042047, -1.5083961], [40.0334158, -1.5082987], [40.0332412, -1.0762719], [39.8040688, -1.0763414]],
+    'LAK': [[30.5461141, -1.8405081], [30.5456327, -2.1639182], [30.8439607, -2.1643744], [30.8443837, -1.8408961], [30.5461141, -1.8405081]],
+    'LOT': [[13.5784136, 32.4380383], [13.5814622, 32.2428769], [13.7011675, 32.2441643], [13.698376, 32.4393353], [13.5784136, 32.4380383]],
+    'MBL': [[32.8061235, -24.386931], [32.8049677, -25.1294871], [33.7920054, -25.1274992], [33.7873122, -24.3850094], [32.8061235, -24.386931]],
     }
 
 L2_BB = """
@@ -153,7 +159,27 @@ def make_dekad_dates(period):
     x_filtered = [pd.Timestamp(x_) for x_ in x if x_ >= period_[0] and x_ < period_[1]]
     return x_filtered
 
-def generate_urls_agERA5(period):
+def generate_urls_agERA5(variable, period = None):
+    agera_vars = [
+            "AGERA5_ET0"
+            "AGERA5_ET0_D"
+            "AGERA5_ET0_M"
+            "AGERA5_ET0_A"
+            "AGERA5_TMIN"
+            "AGERA5_TMAX"
+            "AGERA5_SRF"
+            "AGERA5_WS"
+            "AGERA5_RH06"
+            "AGERA5_RH09"
+            "AGERA5_RH12"
+            "AGERA5_RH15"
+            "AGERA5_RH18"
+            "AGERA5_PF"
+            "AGERA5_PF_D"
+            "AGERA5_PF_M"
+            "AGERA5_PF_A"
+            ]
+    list_url = "https://data.apps.fao.org/static/data/index.html?prefix=static%2Fdata%2Fc3s%2FAGERA5_ET0"
     base_url = "https://data.apps.fao.org/static/data/c3s/AGERA5_ET0_D/AGERA5_ET0_{year}D{acc_dekad:>02}.tif"
     x_filtered = make_dekad_dates(period)
     urls = [base_url.format(year = x.year, acc_dekad = (x.month - 1)*3 + {1: 1, 11: 2, 21: 3}[x.day]) for x in x_filtered]
@@ -377,14 +403,25 @@ def wapor_dl(region, variable,
     str, pd.Dataframe
         If `req_stats` is not None, returns a pd.Dataframe. Otherwise a path to file is returned.
     """
+    global L3_BBS
+
     ## Retrieve info from variable name.
     level, var_code, tres = variable.split("-")
 
     ## Check if region is valid.
-    if all([isinstance(region, str), 
-            # not os.path.isfile(region),
-            region in list(L3_BBS.keys()), 
-            len(region) == 3]):
+    if all([isinstance(region, str), len(region) == 3]):
+        
+        if not region == region.upper():
+            raise ValueError(f"Invalid region code `{region}`, region codes have three capitalized letters.")
+        
+        if region not in list(L3_BBS.keys()):
+            logging.info(f"Searching bounding-box for `{region}`.")
+            bb = l3_bounding_boxes(l3_region = region)
+            if len(bb) == 0:
+                raise ValueError(f"Unkown L3 region `{region}`.")
+            else:
+                logging.info(f"Bounding-box found for `{region}`.")
+                L3_BBS = {**L3_BBS, **bb}
 
         if level == "L3":
             l3_region = region[:] # three letter code to filter L3 datasets in GISMGR2.
@@ -590,8 +627,8 @@ def __l3_codes__(variable = "L3-T-A"):
     valids = np.unique([os.path.split(x)[-1].split(".")[2] for x in public_urls])
     return valids.tolist()
 
-def __l3_bounding_boxes__(variable = "L3-T-A"):
-    urls = generate_urls_v3(variable, period = ["2019-01-01", "2019-02-01"])
+def l3_bounding_boxes(variable = "L3-T-A", l3_region = None):
+    urls = generate_urls_v3(variable, l3_region = l3_region, period = ["2019-01-01", "2019-02-01"])
     l3_bbs = {}
     for region_code, url in zip([os.path.split(x)[-1].split(".")[-3] for x in urls], urls):
         info = gdal.Info("/vsicurl/" + url, format = "json")
@@ -611,17 +648,19 @@ if __name__ == "__main__":
     # unit_conversion = "dekad"
     folder = r"/Users/hmcoerver/Local/test"
 
-    region = "BKA"
+    region = "MBL"
     
-    # TODO fix unit of L1-PCP-E in GISMGR2 metadata (should be mm/day instead of mm).
     variable = "L1-PCP-E"
+    # variable = "L3-T-A"
 
-    period = ["2023-01-01", "2023-02-04"]
+    period = ["2023-01-01", "2023-01-04"]
     unit_conversion = "none"
     overview = "NONE"
     extension = ".tif"
     req_stats = None
 
-    # map1 = wapor_map(region, variable, period, folder, unit_conversion=unit_conversion)
+    # out = l3_bounding_boxes(variable = "L3-T-A")
+
+    map1 = wapor_map(region, variable, period, folder, unit_conversion=unit_conversion)
     # map2 = wapor_map(region, variable, period, folder, unit_conversion=unit_conversion, extension=extension)
 

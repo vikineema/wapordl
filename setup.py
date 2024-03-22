@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name = 'wapordl',
-    version = '0.8',
+    version = '0.9',
     packages = find_packages(include = ['wapordl', 'wapordl.*']),
     include_package_data=True,
     python_requires='>=3.7',
