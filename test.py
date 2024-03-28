@@ -25,6 +25,20 @@ variable = "L2-AETI-D"
 l3_region = "BKA"
 extension = ".tif"
 
+#####
+# AGERA5 CHECKS
+#####
+period_agera5 = ["2024-01-18", pd.Timestamp.now().strftime("%Y-%m-%d")]
+fp21 = wapor_map(region, "AGERA5-ET0-D", period_agera5, folder, extension= ".nc", unit_conversion="dekad")
+fp22 = wapor_map(region, "AGERA5-ET0-D", period_agera5, folder, extension= ".nc", unit_conversion="day")
+fp23 = wapor_map(region, "AGERA5-ET0-E", period_agera5, folder, extension= ".nc", unit_conversion="dekad")
+fp24 = wapor_map(region, "AGERA5-ET0-M", period_agera5, folder)
+df25 = wapor_ts(region, "AGERA5-TMAX-E", period_agera5, overview = 3, unit_conversion="day")
+df26 = wapor_ts(region, "AGERA5-TMIN-E", period_agera5, overview = "NONE", unit_conversion="month")
+df27 = wapor_ts(region, "AGERA5-RH12-E", period_agera5, overview = 1, unit_conversion="year")
+period_agera5 = ["2022-12-18", pd.Timestamp.now().strftime("%Y-%m-%d")]
+fp28 = wapor_map(region, "AGERA5-ET0-A", period_agera5, folder)
+
 ####
 # START TESTS
 ####
@@ -70,6 +84,7 @@ assert md == {'end_date': '2021-01-20',
  'number_of_days': '10',
  'overview': 'NONE',
  'start_date': '2021-01-11',
+ 'temporal_resolution': 'Dekad',
  'units': 'mm/day'}
 assert mean > 0.0
 assert mean < 15.0
@@ -372,6 +387,7 @@ assert md == {'end_date': '2021-01-10',
  'original_units': 'mm/day',
  'overview': 'NONE',
  'start_date': '2021-01-01',
+ 'temporal_resolution': 'Dekad',
  'units': 'mm/dekad',
  'units_conversion_factor': '10'}
 assert mean > 0.0

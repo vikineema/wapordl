@@ -62,6 +62,26 @@ L2_BB = """
 }
 """
 
+AGERA5_VARS = {
+    "AGERA5-ET0-E":     {"long_name": "Reference Evapotranspiration", "units": "mm/day", "source": "FAO56 with agERA5"},
+    "AGERA5-ET0-D":     {"long_name": "Reference Evapotranspiration", "units": "mm/dekad", "source": "FAO56 with agERA5"},
+    "AGERA5-ET0-M":     {"long_name": "Reference Evapotranspiration", "units": "mm/month", "source": "FAO56 with agERA5"},
+    "AGERA5-ET0-A":     {"long_name": "Reference Evapotranspiration", "units": "mm/year", "source": "FAO56 with agERA5"},
+    "AGERA5-TMIN-E":    {"long_name": "Minimum Air Temperature (2m)", "units": "K", "source": "agERA5"},
+    "AGERA5-TMAX-E":    {"long_name": "Maximum Air Temperature (2m)", "units": "K", "source": "agERA5"},
+    "AGERA5-SRF-E":     {"long_name": "Solar Radiation", "units": "J/m2/day", "source": "agERA5"},
+    "AGERA5-WS-E":      {"long_name": "Wind Speed", "units": "m/s", "source": "agERA5"},
+    "AGERA5-RH06-E":    {"long_name": "Relative humidity at 06h (local time, 2m)", "units": "%", "source": "agERA5"},
+    "AGERA5-RH09-E":    {"long_name": "Relative humidity at 09h (local time, 2m)", "units": "%", "source": "agERA5"},
+    "AGERA5-RH12-E":    {"long_name": "Relative humidity at 12h (local time, 2m)", "units": "%", "source": "agERA5"},
+    "AGERA5-RH15-E":    {"long_name": "Relative humidity at 15h (local time, 2m)", "units": "%", "source": "agERA5"},
+    "AGERA5-RH18-E":    {"long_name": "Relative humidity at 18h (local time, 2m)", "units": "%", "source": "agERA5"},
+    "AGERA5-PF-E":      {"long_name": "Precipitation", "units": "mm/day", "source": "agERA5"},
+    "AGERA5-PF-D":      {"long_name": "Precipitation", "units": "mm/dekad", "source": "agERA5"},
+    "AGERA5-PF-M":      {"long_name": "Precipitation", "units": "mm/month", "source": "agERA5"},
+    "AGERA5-PF-A":      {"long_name": "Precipitation", "units": "mm/year", "source": "agERA5"},
+}
+
 def guess_l3_region(region_shape):
 
     checks = {x: shapely.Polygon(np.array(bb)).intersects(region_shape) for x, bb in L3_BBS.items()}
@@ -98,38 +118,64 @@ def collect_responses(url, info = ["code"]):
 
 def date_func(url, tres):
     if tres == "D":
-        # if "AGERA5" in url:
-        #     year_acc_dekad = os.path.split(url)[-1].split("_")[-1].split(".")[0]
-        #     year = year_acc_dekad[:4]
-        #     acc_dekad = int(year_acc_dekad[-2:])
-        #     month = str((acc_dekad - 1) // 3 + 1).zfill(2)
-        #     dekad = str((acc_dekad - 1) % 3 + 1)
-        # else:
-        year, month, dekad = os.path.split(url)[-1].split(".")[-2].split("-")
+        if "AGERA5" in url:
+            year_acc_dekad = os.path.split(url)[-1].split("_")[-1].split(".")[0]
+            year = year_acc_dekad[:4]
+            acc_dekad = int(year_acc_dekad[-2:])
+            month = str((acc_dekad - 1) // 3 + 1).zfill(2)
+            dekad = str((acc_dekad - 1) % 3 + 1)
+        else:
+            year, month, dekad = os.path.split(url)[-1].split(".")[-2].split("-")
         start_day = {'D1': '01', 'D2': '11', 'D3': '21', '1': '01', '2': '11', '3': '21'}[dekad]
         start_date = f"{year}-{month}-{start_day}"
         end_day = {'D1': '10', 'D2': '20', 'D3': pd.Timestamp(start_date).daysinmonth, '1': '10', '2': '20', '3': pd.Timestamp(start_date).daysinmonth}[dekad]
         end_date = f"{year}-{month}-{end_day}"
     elif tres == "M":
-        year, month = os.path.split(url)[-1].split(".")[-2].split("-")
+        if "AGERA5" in url:
+            year = os.path.split(url)[-1].split("_")[-1][:4]
+            month = os.path.split(url)[-1].split("_")[-1][5:7]
+        else:
+            year, month = os.path.split(url)[-1].split(".")[-2].split("-")
         start_date = f"{year}-{month}-01"
         end_date = f"{year}-{month}-{pd.Timestamp(start_date).days_in_month}"
     elif tres == "A":
-        year = os.path.split(url)[-1].split(".")[-2]
+        if "AGERA5" in url:
+            year = os.path.split(url)[-1].split("_")[-1][:4]
+        else:
+            year = os.path.split(url)[-1].split(".")[-2]
         start_date = f"{year}-01-01"
         end_date = f"{year}-12-31"
     elif tres == "E":
-        year, month, start_day = os.path.split(url)[-1].split(".")[-2].split("-")
+        if "AGERA5" in url:
+            year = os.path.split(url)[-1].split("_")[-1][:4]
+            month = os.path.split(url)[-1].split("_")[-1][4:6]
+            start_day = os.path.split(url)[-1].split("_")[-1][6:8]
+        else:
+            year, month, start_day = os.path.split(url)[-1].split(".")[-2].split("-")
         start_date = end_date = f"{year}-{month}-{start_day}"
     else:
         raise ValueError("Invalid temporal resolution.") # NOTE: TESTED
+    
     number_of_days = (pd.Timestamp(end_date) - pd.Timestamp(start_date) + pd.Timedelta(1, "D")).days
-    return {"start_date": start_date, "end_date": end_date, "number_of_days": number_of_days}
+    
+    date_md = {
+        "start_date": start_date, 
+        "end_date": end_date, 
+        "number_of_days": number_of_days,
+        "temporal_resolution": {"E": "Day", "D": "Dekad", "M": "Month", "A": "Year"}[tres],
+        }
+    
+    if tres == "E":
+        dekad = min(3, ((int(start_day) - 1) // 10) + 1)
+        days_in_dekad = {1: 10, 2: 10, 3: pd.Timestamp(start_date).daysinmonth - 20}[dekad]
+        date_md["days_in_dekad"] = days_in_dekad
+    
+    return date_md
 
 def collect_metadata(variable):
 
-    # if variable == "L1-ET0-D":
-    #     return {"long_name": "Reference Evapotranspiration", "units": "mm/dekad", "source": "FAO56 with agERA5"}
+    if variable in AGERA5_VARS.keys():
+        return AGERA5_VARS[variable]
     
     if "L1" in variable:
         base_url = f"https://data.apps.fao.org/gismgr/api/v2/catalog/workspaces/WAPOR-3/mapsets"
@@ -143,46 +189,96 @@ def collect_metadata(variable):
     var_codes = {x[0]: {"long_name": x[1], "units": x[2]} for x in collect_responses(base_url, info = info)}
     return var_codes[variable]
 
-def make_dekad_dates(period):
+def make_dekad_dates(period, max_date = None):
     period_ = [pd.Timestamp(x) for x in period]
-
+    if isinstance(max_date, pd.Timestamp):
+        period_[1] = min(period_[1], max_date)
     syear = period_[0].year
     smonth = period_[0].month
     eyear = period_[1].year
     emonth = period_[1].month
-
     x1 = pd.date_range(f"{syear}-{smonth}-01", f"{eyear}-{emonth}-01", freq = "MS")
     x2 = x1 + pd.Timedelta("10 days")
     x3 = x1 + pd.Timedelta("20 days")
     x = np.sort(np.concatenate((x1, x2, x3)))
-
     x_filtered = [pd.Timestamp(x_) for x_ in x if x_ >= period_[0] and x_ < period_[1]]
     return x_filtered
 
-def generate_urls_agERA5(variable, period = None):
-    agera_vars = [
-            "AGERA5_ET0"
-            "AGERA5_ET0_D"
-            "AGERA5_ET0_M"
-            "AGERA5_ET0_A"
-            "AGERA5_TMIN"
-            "AGERA5_TMAX"
-            "AGERA5_SRF"
-            "AGERA5_WS"
-            "AGERA5_RH06"
-            "AGERA5_RH09"
-            "AGERA5_RH12"
-            "AGERA5_RH15"
-            "AGERA5_RH18"
-            "AGERA5_PF"
-            "AGERA5_PF_D"
-            "AGERA5_PF_M"
-            "AGERA5_PF_A"
-            ]
-    list_url = "https://data.apps.fao.org/static/data/index.html?prefix=static%2Fdata%2Fc3s%2FAGERA5_ET0"
-    base_url = "https://data.apps.fao.org/static/data/c3s/AGERA5_ET0_D/AGERA5_ET0_{year}D{acc_dekad:>02}.tif"
-    x_filtered = make_dekad_dates(period)
-    urls = [base_url.format(year = x.year, acc_dekad = (x.month - 1)*3 + {1: 1, 11: 2, 21: 3}[x.day]) for x in x_filtered]
+def make_monthly_dates(period, max_date = None):
+    period_ = [pd.Timestamp(x) for x in period]
+    period_[0] = pd.Timestamp(f"{period_[0].year}-{period_[0].month}-01")
+    if isinstance(max_date, pd.Timestamp):
+        period_[1] = min(period_[1], max_date)
+    x1 = pd.date_range(period_[0], period_[1], freq = "MS")
+    x_filtered = [pd.Timestamp(x_) for x_ in x1]
+    return x_filtered
+
+def make_annual_dates(period, max_date = None):
+    period_ = [pd.Timestamp(x) for x in period]
+    period_[0] = pd.Timestamp(f"{period_[0].year}-01-01")
+    if isinstance(max_date, pd.Timestamp):
+        period_[1] = min(period_[1], max_date)
+    x1 = pd.date_range(period_[0], period_[1], freq = "A-JAN")
+    x_filtered = [pd.Timestamp(x_) for x_ in x1]
+    return x_filtered
+
+def make_daily_dates(period, max_date = None):
+    period_ = [pd.Timestamp(x) for x in period]
+    if isinstance(max_date, pd.Timestamp):
+        period_[1] = min(period_[1], max_date)
+    x1 = pd.date_range(period_[0], period_[1], freq = "D")
+    x_filtered = [pd.Timestamp(x_) for x_ in x1]
+    return x_filtered
+
+def generate_urls_agERA5(variable, period = None, check_urls = True):
+    """https://data.apps.fao.org/static/data/index.html?prefix=static%2Fdata%2Fc3s%2FAGERA5_ET0
+    """
+
+    level, var_code, tres = variable.split("-")
+
+    if variable not in AGERA5_VARS.keys():
+        raise ValueError(f"Invalid variable `{variable}`, choose one from `{AGERA5_VARS.keys()}`.")
+    
+    max_date = pd.Timestamp.now() - pd.Timedelta(days = 25)
+    if isinstance(period, type(None)):
+        period = ["1979-01-01", max_date.strftime("%Y-%m-%d")]
+
+    base_url = f"https://data.apps.fao.org/static/data/c3s/{level}_{var_code}_{tres}"
+    urls = list()
+    if tres == "E":
+        base_url = base_url[:-2]
+        x_filtered = make_daily_dates(period, max_date = max_date)
+        for x in x_filtered:
+            url = os.path.join(base_url, f"{level}_{var_code}_{x.strftime('%Y%m%d')}.tif")
+            urls.append(url)
+    elif tres == "D":
+        x_filtered = make_dekad_dates(period, max_date=max_date)
+        for x in x_filtered:
+            acc_dekad = (x.month - 1)*3 + {1: 1, 11: 2, 21: 3}[x.day]
+            url = os.path.join(base_url, f"{level}_{var_code}_{x.year}D{acc_dekad:>02}.tif")
+            urls.append(url)
+    elif tres == "M":
+        x_filtered = make_monthly_dates(period, max_date = max_date)
+        for x in x_filtered:
+            url = os.path.join(base_url, f"{level}_{var_code}_{x.year}M{x.month:>02}.tif")
+            urls.append(url)
+    elif tres == "A":
+        x_filtered = make_annual_dates(period, max_date = max_date)
+        for x in x_filtered:
+            url = os.path.join(base_url, f"{level}_{var_code}_{x.year}.tif")
+            urls.append(url)
+    else:
+        raise ValueError(f"Invalid temporal resolution `{tres}`.")
+    
+    if check_urls:
+        for url in urls.copy():
+            try:
+                x = requests.get(url, stream = True)
+                x.raise_for_status()
+            except requests.exceptions.HTTPError:
+                logging.debug(f"Invalid url detected, removing `{url}`.")
+                urls.remove(url)
+
     return tuple(sorted(urls))
 
 def generate_urls_v3(variable, l3_region = None, period = None):
@@ -215,7 +311,7 @@ def __make_band_names__(length):
         i += 1
     return letters[:length]
 
-def unit_convertor(urls, out_fn, unit_conversion, warp):
+def unit_convertor(urls, in_fn, out_fn, unit_conversion, warp, coptions = []):
 
     input_files = dict()
     input_bands = dict()
@@ -223,12 +319,23 @@ def unit_convertor(urls, out_fn, unit_conversion, warp):
     should_convert = list()
     letters = __make_band_names__(len(urls))
 
+    if "AGERA5" in urls[0][1]:
+        dtype = gdalconst.GDT_Float64
+    else:
+        dtype = gdalconst.GDT_Int32 # NOTE unit conversion can increase the DN's, 
+                                    # causing the data to not fit inside Int16 anymore...
+                                    # so for now just moving up to Int32. Especially necessary
+                                    # for NPP (which has a scale-factor of 0.001).
+
     for i, (md, _) in enumerate(urls):
         band_number = i+1
         letter = letters[i]
-        input_files[letter] = out_fn
+        input_files[letter] = in_fn
         input_bands[f"{letter}_band"] = band_number
-        number_of_days = md.get("number_of_days", "unknown")
+        if md.get("temporal_resolution", "unknown") == "Day":
+            number_of_days = md.get("days_in_dekad", "unknown")
+        else:
+            number_of_days = md.get("number_of_days", "unknown")
         days_in_month = pd.Timestamp(md.get("start_date", "nat")).daysinmonth
         source_unit = md.get("units", "unknown")
         source_unit_split = source_unit.split("/")
@@ -287,11 +394,9 @@ def unit_convertor(urls, out_fn, unit_conversion, warp):
             calc = calc,
             outfile = out_fn,
             overwrite = True,
+            creation_options=coptions,
             quiet = True,
-            type = gdalconst.GDT_Int32, # NOTE unit conversion can increase the DN's, 
-                                        # causing the data to not fit inside Int16 anymore...
-                                        # so for now just moving up to Int32. Especially necessary
-                                        # for NPP (which has a scale-factor of 0.001).
+            type = dtype,
             NoDataValue = ndv,
             **input_files,
             **input_bands,
@@ -302,6 +407,7 @@ def unit_convertor(urls, out_fn, unit_conversion, warp):
             warp.GetRasterBand(i+1).SetOffset(offset)
 
         warp.FlushCache()
+        filen = out_fn
     else:
         if all(conversion_is_one):
             logging.info(f"Units are already as requested, no conversion needed.")
@@ -312,8 +418,9 @@ def unit_convertor(urls, out_fn, unit_conversion, warp):
                 md["units"] = md["original_units"]
                 md["units_conversion_factor"] = f"N/A"
                 md["original_units"] = "N/A"
+        filen = in_fn
 
-    return warp
+    return warp, filen
 
 def cog_dl(urls, out_fn, overview = "NONE", warp_kwargs = {}, vrt_options = {"separate": True}, unit_conversion = "none"):
 
@@ -357,8 +464,12 @@ def cog_dl(urls, out_fn, overview = "NONE", warp_kwargs = {}, vrt_options = {"se
     nbands = warp.RasterCount
     
     if nbands == n_urls and unit_conversion != "none":
-        warp = unit_convertor(urls, out_fn, unit_conversion, warp)
-
+        out_fn_new = out_fn.replace(out_ext, f"_converted{out_ext}")
+        out_fn_old = out_fn
+        warp, out_fn = unit_convertor(urls, out_fn, out_fn_new, unit_conversion, warp, coptions = valid_cos[out_ext])
+    else:
+        out_fn_old = ""
+        
     if nbands == n_urls:
         for i, (md, _) in enumerate(urls):
             if not isinstance(md, type(None)):
@@ -373,7 +484,13 @@ def cog_dl(urls, out_fn, overview = "NONE", warp_kwargs = {}, vrt_options = {"se
         except PermissionError:
             ...
 
-    return out_fn
+    if os.path.isfile(out_fn_old) and os.path.isfile(out_fn_new):
+        try:
+            os.remove(out_fn_old)
+        except PermissionError:
+            ...
+
+    return out_fn, vrt_fn
 
 def wapor_dl(region, variable,
              period = ["2021-01-01", "2022-01-01"], 
@@ -439,7 +556,8 @@ def wapor_dl(region, variable,
             raise ValueError(f"Geojson file not found.") # NOTE: TESTED
         else:
             region_code = os.path.split(region)[-1].replace(".geojson", "")
-            region_shape = shapely.from_geojson(open(region,'r').read())
+            with open(region,'r', encoding="utf-8") as f:
+                region_shape = shapely.from_geojson(f.read())
         l3_region = None
     elif isinstance(region, list):
         if not all([region[2] > region[0], region[3] > region[1]]):
@@ -467,8 +585,11 @@ def wapor_dl(region, variable,
             raise ValueError(f"Invalid period.") # NOTE: TESTED
         period = [x.strftime("%Y-%m-%d") for x in period]
 
-    ## Collect urls for requested variable.
-    urls = generate_urls_v3(variable, l3_region = l3_region, period = period)
+    ## Collect urls for requested variable.        
+    if "AGERA5" in variable:
+        urls = generate_urls_agERA5(variable, period = period)
+    else:
+        urls = generate_urls_v3(variable, l3_region = l3_region, period = period)
 
     if len(urls) == 0:
         raise ValueError("No files found for selected region, variable and period.")  # NOTE: TESTED
@@ -501,7 +622,7 @@ def wapor_dl(region, variable,
         ...
 
     ## Check if region overlaps with datasets bounding-box.
-    if not isinstance(region_shape, type(None)):
+    if not isinstance(region_shape, type(None)) and level != "AGERA5":
         if level == "L2":
             data_bb = shapely.from_geojson(L2_BB)
         else:
@@ -527,7 +648,7 @@ def wapor_dl(region, variable,
     else:
         warp_fn = f"/vsimem/{pd.Timestamp.now()}_{region_code}_{variable}_{overview}_{unit_conversion}.tif"
 
-    warp_fn = cog_dl(md_urls, warp_fn, overview = overview_, warp_kwargs = warp_kwargs, unit_conversion = unit_conversion)
+    warp_fn, vrt_fn = cog_dl(md_urls, warp_fn, overview = overview_, warp_kwargs = warp_kwargs, unit_conversion = unit_conversion)
 
     ## Collect the stats into a pd.Dataframe if necessary.
     if not isinstance(req_stats, type(None)):
@@ -543,8 +664,8 @@ def wapor_dl(region, variable,
         data = warp_fn
 
     ## Unlink memory files.
-    if "/vsimem/" in warp_fn.replace(".tif", ".vrt"):
-        _ = gdal.Unlink(warp_fn.replace(".tif", ".vrt"))
+    if "/vsimem/" in vrt_fn:
+        _ = gdal.Unlink(vrt_fn)
     if "/vsimem/" in warp_fn:
         _ = gdal.Unlink(warp_fn)
 
@@ -595,11 +716,11 @@ def wapor_map(region, variable, period, folder,
 def wapor_ts(region, variable, period, overview,
              unit_conversion = "none",
              req_stats = ["minimum", "maximum", "mean"]):
-    
+
     valid_units = ["none", "dekad", "day", "month", "year"]
     if not unit_conversion in valid_units:
         raise ValueError(f"Please select one of {valid_units} instead of {unit_conversion}.")  # NOTE: TESTED
-    
+
     ## Check if valid statistics have been selected.
     if not isinstance(req_stats, list):
         raise ValueError("Please specify a list of required statistics.") # NOTE: TESTED
@@ -618,8 +739,8 @@ def wapor_ts(region, variable, period, overview,
             req_stats = req_stats,
             unit_conversion = unit_conversion,
             folder = None,
-             )
-    
+    )
+
     return df
 
 def __l3_codes__(variable = "L3-T-A"):
@@ -650,17 +771,21 @@ if __name__ == "__main__":
 
     region = "MBL"
     
-    variable = "L1-PCP-E"
+    # variable = "L1-PCP-E"
     # variable = "L3-T-A"
+    variable = "AGERA5-TMAX-E"
 
-    period = ["2023-01-01", "2023-01-04"]
-    unit_conversion = "none"
+    # period = ["2023-01-01", "2023-01-04"]
+    period = ["2024-02-01", "2024-06-01"]
+    unit_conversion = "dekad"
     overview = "NONE"
     extension = ".tif"
     req_stats = None
 
+    check_urls = True
+
     # out = l3_bounding_boxes(variable = "L3-T-A")
 
-    map1 = wapor_map(region, variable, period, folder, unit_conversion=unit_conversion)
+    # map1 = wapor_map(region, variable, period, folder, unit_conversion=unit_conversion)
     # map2 = wapor_map(region, variable, period, folder, unit_conversion=unit_conversion, extension=extension)
 
