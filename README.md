@@ -118,7 +118,7 @@ fp = wapor_map(region, variable, period, folder, unit_conversion = "year")
 - Automatic overview selection based on the size of the shape.
 - ~~Support for variables with daily resolution (i.e. `L1-PCP-E` and `L1-RET-E`).~~ ✅
 - ~~Easily download a lower level variable for a level-3 region.~~ ✅
-- Support for agERA5 variables.
+- ~~Support for agERA5 variables.~~ ✅
 - ~~Determine `l3_region` automatically from `region`.~~ ✅
 - ~~Select unit of output.~~ ✅
 - ~~Download a region from a bounding-box (i.e. without a shape).~~ ✅
