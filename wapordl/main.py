@@ -82,6 +82,24 @@ AGERA5_VARS = {
     "AGERA5-PF-A":      {"long_name": "Precipitation", "units": "mm/year", "source": "agERA5"},
 }
 
+def threed_to_twod(region):
+    from osgeo_utils.samples import ogr2ogr
+    fh_2d =  region.replace(".geojson", "_2D.geojson")
+    if os.path.isfile(fh_2d):
+        try:
+            os.remove(fh_2d)
+        except PermissionError:
+            while os.path.isfile(fh_2d):
+                fh_2d = fh_2d.replace(".geojson", "_.geojson")
+    args = ["ogr2ogr",
+            fh_2d,
+            region, 
+            "-dim", "2", 
+            "-f", "GeoJSON",
+            ]
+    _ = ogr2ogr.main(args = args)
+    return fh_2d
+
 def guess_l3_region(region_shape):
 
     checks = {x: shapely.Polygon(np.array(bb)).intersects(region_shape) for x, bb in L3_BBS.items()}
@@ -556,8 +574,17 @@ def wapor_dl(region, variable,
             raise ValueError(f"Geojson file not found.") # NOTE: TESTED
         else:
             region_code = os.path.split(region)[-1].replace(".geojson", "")
-            with open(region,'r', encoding="utf-8") as f:
-                region_shape = shapely.from_geojson(f.read())
+            try:
+                with open(region,'r', encoding="utf-8") as f:
+                    region_shape = shapely.from_geojson(f.read())
+            except shapely.GEOSException as e:
+                if "Expected two coordinates found more than two" in str(e):
+                    logging.warning("Shapely currently does not support 3D geometries, (see https://shapely.readthedocs.io/en/latest/reference/shapely.from_geojson.html#shapely.from_geojson), trying to convert to 2D geojson.")
+                    region = threed_to_twod(region)
+                    with open(region,'r', encoding="utf-8") as f:
+                        region_shape = shapely.from_geojson(f.read())
+                else:
+                    raise e
         l3_region = None
     elif isinstance(region, list):
         if not all([region[2] > region[0], region[3] > region[1]]):

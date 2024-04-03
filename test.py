@@ -197,6 +197,10 @@ except ValueError as e:
         print("succes")
     else:
         raise e
+    
+region_3D = [str(x) for x in l3_regions if "3D" in str(x)][0]
+fp18a = wapor_map(region_3D, "L1-T-D", period, folder)
+fp18b = wapor_ts(region_3D, "L1-T-D", period, overview = 2)
 
 try: ##
     _ = wapor_map(region, "L1-AETI-M", period, folder, extension=".vrt")
