@@ -700,7 +700,8 @@ def wapor_dl(region, variable,
 
 def wapor_map(region, variable, period, folder, 
               unit_conversion = "none",
-              overview = "NONE", extension = ".tif"):
+              overview = "NONE", extension = ".tif", 
+              seperate = False):
 
     ## Check if raw-data will be downloaded.
     if overview != "NONE":
@@ -722,8 +723,32 @@ def wapor_map(region, variable, period, folder,
                   unit_conversion = unit_conversion,
                   req_stats = None,
                   )
-    
-    if extension != ".tif":
+    if extension == ".tif" and seperate:
+        logging.info("Splitting single GeoTIFF into multiple files.")
+        folder = os.path.split(fp)[0]
+        ds = gdal.Open(fp)
+        number_of_bands = ds.RasterCount
+        fps = list()
+        for band_number in range(1, number_of_bands + 1):
+            band = ds.GetRasterBand(band_number)
+            md = band.GetMetadata()
+            options = gdal.TranslateOptions(
+                bandList=[band_number],
+                creationOptions= ["COMPRESS=LZW"],
+                )
+            output_file = fp.replace(".tif", f"_{md['start_date']}.tif")
+            gdal.Translate(output_file, fp, options = options)
+            fps.append(output_file)
+        ds.FlushCache()
+        ds = None
+        try:
+            os.remove(fp)
+        except  PermissionError:
+            ...
+        return fps
+    elif extension != ".tif":
+        if seperate:
+            logging.warning(f"The `seperate` option only works with `.tif` extension, not with `{extension}`.")
         logging.info(f"Converting from `.tif` to `{extension}`.")
         toptions = {".nc": {"creationOptions": ["COMPRESS=DEFLATE", "FORMAT=NC4C"]}}
         options = gdal.TranslateOptions(

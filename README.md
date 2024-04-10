@@ -87,6 +87,12 @@ fp
 >>> 'path/to/some/output/folder/my_region_L2-AETI-D_NONE_none.tif'
 ```
 
+To save downloaded data in single-band files (instead of 1 file with multiple bands), set the `seperate` keyword.
+
+```python
+fps = wapor_map(region, "L2-AETI-D", period, folder, seperate = True)
+```
+
 To download a timeseries and a netcdf for a bounding-box:
 
 ```python
@@ -116,6 +122,7 @@ fp = wapor_map(region, variable, period, folder, unit_conversion = "year")
 ## Upcoming
 
 - Automatic overview selection based on the size of the shape.
+- ~~Option to split multiband GeoTIFF into single band files.~~ ✅
 - ~~Support for variables with daily resolution (i.e. `L1-PCP-E` and `L1-RET-E`).~~ ✅
 - ~~Easily download a lower level variable for a level-3 region.~~ ✅
 - ~~Support for agERA5 variables.~~ ✅
