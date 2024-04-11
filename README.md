@@ -87,10 +87,10 @@ fp
 >>> 'path/to/some/output/folder/my_region_L2-AETI-D_NONE_none.tif'
 ```
 
-To save downloaded data in single-band files (instead of 1 file with multiple bands), set the `seperate` keyword.
+To save downloaded data in unscaled single-band files (instead of 1 file with multiple bands), set the `seperate_unscale` keyword. Note that this will results in larger files.
 
 ```python
-fps = wapor_map(region, "L2-AETI-D", period, folder, seperate = True)
+fps = wapor_map(region, "L2-AETI-D", period, folder, seperate_unscale = True)
 ```
 
 To download a timeseries and a netcdf for a bounding-box:

@@ -92,16 +92,27 @@ proj = osr.SpatialReference(wkt=ds.GetProjection())
 assert proj.GetAttrValue('AUTHORITY',1) == "4326"
 ds = ds.FlushCache()
 
-fps1a = wapor_map(region, "L2-AETI-D", period, folder, seperate=True)
-ds = gdal.Open(fps1a[0])
+fps1a = wapor_map(region, "L2-AETI-D", period, folder, seperate_unscale=True)
+ds = gdal.Open(fps1a[1])
 assert ds.RasterCount == 1
 band = ds.GetRasterBand(1)
 ndv = band.GetNoDataValue()
 scale = band.GetScale()
-array = band.ReadAsArray() * scale
-array[array == ndv*scale] = np.nan
-mean = np.nanmean(array)
-md = band.GetMetadata()
+assert scale == 1 or isinstance(scale, type(None))
+array_X = band.ReadAsArray()
+array_X[array_X == ndv] = np.nan
+mean_X = np.nanmean(array_X)
+
+ds_ = gdal.Open(fps1a[0])
+band_ = ds_.GetRasterBand(1)
+ndv_ = band_.GetNoDataValue()
+scale_ = band_.GetScale()
+assert scale_ == 1 or isinstance(scale_, type(None))
+array_ = band_.ReadAsArray()
+array_[array_ == ndv_] = np.nan
+mean_ = np.nanmean(array_)
+assert mean_ == mean # NOTE mean comes from fp1 (without unscaling)
+md = band_.GetMetadata()
 assert md == {'end_date': '2021-01-20',
  'long_name': 'Actual EvapoTranspiration and Interception',
  'number_of_days': '10',
@@ -109,11 +120,24 @@ assert md == {'end_date': '2021-01-20',
  'start_date': '2021-01-11',
  'temporal_resolution': 'Dekad',
  'units': 'mm/day'}
-assert mean > 0.0
-assert mean < 15.0
+assert mean_ > 0.0
+assert mean_ < 15.0
 proj = osr.SpatialReference(wkt=ds.GetProjection())
 assert proj.GetAttrValue('AUTHORITY',1) == "4326"
 ds = ds.FlushCache()
+
+fps1b = wapor_map(region, "L2-AETI-D", period, folder, unit_conversion = "dekad", seperate_unscale=True)
+ds = gdal.Open(fps1b[1])
+assert ds.RasterCount == 1
+band = ds.GetRasterBand(1)
+ndv = band.GetNoDataValue()
+scale = band.GetScale()
+assert scale == 1 or isinstance(scale, type(None))
+array_Y = band.ReadAsArray()
+array_Y[array_Y == ndv] = np.nan
+mean_Y = np.nanmean(array_Y)
+md_Y = band.GetMetadata()
+assert mean_Y / int(md_Y["number_of_days"]) - mean_X < 1e-10
 
 fp2 = wapor_map(region, "L2-AETI-M", period, folder)
 ds = gdal.Open(fp2)

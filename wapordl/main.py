@@ -701,7 +701,7 @@ def wapor_dl(region, variable,
 def wapor_map(region, variable, period, folder, 
               unit_conversion = "none",
               overview = "NONE", extension = ".tif", 
-              seperate = False):
+              seperate_unscale = False):
 
     ## Check if raw-data will be downloaded.
     if overview != "NONE":
@@ -723,8 +723,9 @@ def wapor_map(region, variable, period, folder,
                   unit_conversion = unit_conversion,
                   req_stats = None,
                   )
-    if extension == ".tif" and seperate:
-        logging.info("Splitting single GeoTIFF into multiple files.")
+
+    if extension == ".tif" and seperate_unscale:
+        logging.info("Splitting single GeoTIFF into multiple unscaled files.")
         folder = os.path.split(fp)[0]
         ds = gdal.Open(fp)
         number_of_bands = ds.RasterCount
@@ -733,11 +734,14 @@ def wapor_map(region, variable, period, folder,
             band = ds.GetRasterBand(band_number)
             md = band.GetMetadata()
             options = gdal.TranslateOptions(
+                unscale = True,
+                outputType = gdalconst.GDT_Float64,
                 bandList=[band_number],
                 creationOptions= ["COMPRESS=LZW"],
                 )
             output_file = fp.replace(".tif", f"_{md['start_date']}.tif")
-            gdal.Translate(output_file, fp, options = options)
+            x = gdal.Translate(output_file, fp, options = options)
+            x.FlushCache()
             fps.append(output_file)
         ds.FlushCache()
         ds = None
@@ -747,7 +751,7 @@ def wapor_map(region, variable, period, folder,
             ...
         return fps
     elif extension != ".tif":
-        if seperate:
+        if seperate_unscale:
             logging.warning(f"The `seperate` option only works with `.tif` extension, not with `{extension}`.")
         logging.info(f"Converting from `.tif` to `{extension}`.")
         toptions = {".nc": {"creationOptions": ["COMPRESS=DEFLATE", "FORMAT=NC4C"]}}
